@@ -32,6 +32,8 @@ var Sim = (function () {
     var g = {
       players: [],
       effects: [],
+      decals: [],       // 墙上的弹孔
+      tracers: [],      // 弹道线
       time: 0,
       shots: 0,
       hits: 0
@@ -63,7 +65,12 @@ var Sim = (function () {
     if (res.hit) {
       g.hits++;
       addEffect(g, res.x, res.y, 'spark');
+      g.decals.push({ x: res.x, y: res.y, t: 0, life: 7 });
+      if (g.decals.length > 36) g.decals.shift();
     }
+    /* 弹道线：枪口 → 命中点，60ms 内淡出 */
+    g.tracers.push({ x0: p.x, y0: p.y, x1: res.x, y1: res.y, t: 0, life: 0.06 });
+    if (g.tracers.length > 8) g.tracers.shift();
     // 后坐力
     p.recoil = Math.min(1.2, p.recoil + def.recoil * 0.35);
     p.pitch = clamp(p.pitch + def.recoil * 0.012, -G.PITCH_MAX, G.PITCH_MAX);
@@ -145,6 +152,16 @@ var Sim = (function () {
       var e = g.effects[i];
       e.t += dt;
       if (e.t >= e.life) g.effects.splice(i, 1);
+    }
+    for (var j = g.tracers.length - 1; j >= 0; j--) {
+      var tr = g.tracers[j];
+      tr.t += dt;
+      if (tr.t >= tr.life) g.tracers.splice(j, 1);
+    }
+    for (var k2 = g.decals.length - 1; k2 >= 0; k2--) {
+      var dc = g.decals[k2];
+      dc.t += dt;
+      if (dc.t >= dc.life) g.decals.splice(k2, 1);
     }
   }
 

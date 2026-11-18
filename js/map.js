@@ -18,11 +18,11 @@ var MapData = (function () {
     rect(W - x - w, H - y - h, w, h, v);
   }
 
-  // 外墙
-  rect(0, 0, W, 1, TEX.METAL);
-  rect(0, H - 1, W, 1, TEX.METAL);
-  rect(0, 0, 1, H, TEX.METAL);
-  rect(W - 1, 0, 1, H, TEX.METAL);
+  // 外圈：铁丝网围栏（矮墙，上面能看见天空）
+  rect(0, 0, W, 1, TEX.FENCE);
+  rect(0, H - 1, W, 1, TEX.FENCE);
+  rect(0, 0, 1, H, TEX.FENCE);
+  rect(W - 1, 0, 1, H, TEX.FENCE);
 
   // 四角的集装箱堆（每块都自动镜像到四个角）
   sym(2, 2, 6, 2, TEX.RED);
@@ -53,6 +53,14 @@ var MapData = (function () {
     if (tx < 0 || ty < 0 || tx >= W || ty >= H) return TEX.METAL;
     return grid[ty * W + tx];
   }
+  /* 每个格子的墙高（格）：围栏矮，集装箱/木箱高 */
+  function h(tx, ty) {
+    var v = at(tx, ty);
+    if (v === TEX.NONE) return 0;
+    if (v === TEX.FENCE) return 1.25;
+    if (v === TEX.CRATE) return 1.7;
+    return 2.4;
+  }
   function solid(tx, ty) { return at(tx, ty) !== TEX.NONE; }
   function solidAt(wx, wy) { return solid(Math.floor(wx / G.TILE), Math.floor(wy / G.TILE)); }
 
@@ -74,6 +82,6 @@ var MapData = (function () {
   return {
     W: W, H: H, grid: grid,
     spawns: spawns,
-    at: at, solid: solid, solidAt: solidAt, blocked: blocked
+    at: at, h: h, solid: solid, solidAt: solidAt, blocked: blocked
   };
 })();

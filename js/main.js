@@ -10,6 +10,7 @@
   var player = null;
   var state = 'menu';           // menu | play | pause
   var gunImg = { rifle: null, pistol: null };
+  var lastMuzzle = { x: 0, y: 0 };
   var last = 0;
 
   Render.init(canvas);
@@ -97,9 +98,10 @@
     var gw = img.width * scale, gh = img.height * scale;
     var bobX = Math.sin(p.bob) * 3 * p.moving;
     var bobY = Math.abs(Math.cos(p.bob)) * 3 * p.moving;
-    var x = G.W - gw + 34 + bobX + p.recoil * -6;
-    var y = G.H - gh + 10 + bobY + p.recoil * 10;
-    var rot = p.recoil * -0.03;
+    var x = G.W - gw + 26 + bobX + p.recoil * -6;
+    var y = G.H - gh + 2 + bobY + p.recoil * 10;
+    /* 枪口朝向屏幕中心（准星）——不让枪管横着指右边 */
+    var rot = -0.15 + p.recoil * -0.03;
 
     ctx.save();
     if (p.reloadT > 0) {
@@ -115,8 +117,12 @@
     ctx.drawImage(img, x | 0, y | 0, gw | 0, gh | 0);
 
     if (p.muzzle > 0) {
-      var mx = Math.min(x + gw * 0.93, G.W - 8);
-      var my = y + gh * 0.3;
+      /* 枪口位置要跟着枪身旋转走，否则火焰会飘在画面外 */
+      var lx = x + gw * 0.93 - G.W / 2, ly = y + gh * 0.33 - G.H;
+      var cs = Math.cos(rot), sn = Math.sin(rot);
+      var mx = G.W / 2 + lx * cs - ly * sn;
+      var my = G.H + lx * sn + ly * cs;
+      lastMuzzle.x = mx; lastMuzzle.y = my;
       ctx.save();
       ctx.translate(mx, my);
       ctx.rotate(Math.random() * Math.PI);
@@ -136,20 +142,54 @@
     ctx.restore();
   }
 
-  /* ---------- 命中火花 ---------- */
-  function drawEffects(ctx) {
-    for (var i = 0; i < game.effects.length; i++) {
+  /* ---------- 弹着点 / 弹孔 / 弹道 ---------- */
+  function drawShots(ctx) {
+    var i, s;
+
+    /* 弹孔（贴在墙上，7 秒后消失） */
+    for (i = 0; i < game.decals.length; i++) {
+      var d = game.decals[i];
+      s = Render.project(d.x, d.y);
+      if (!s) continue;
+      var a = d.t > d.life - 1 ? (d.life - d.t) : 1;
+      ctx.globalAlpha = 0.95 * a;
+      var sz = clamp(14 / s.depth, 2, 4.5);
+      ctx.fillStyle = '#15181d';
+      ctx.fillRect(s.x - sz / 2, s.y - sz / 2, sz, sz);
+      ctx.globalAlpha = 0.5 * a;
+      ctx.fillStyle = '#cfd6de';
+      ctx.fillRect(s.x - sz / 2 - 1, s.y - sz / 2 - 1, 1, sz + 2);
+      ctx.fillRect(s.x + sz / 2, s.y - sz / 2 - 1, 1, sz + 2);
+    }
+
+    /* 火花 */
+    for (i = 0; i < game.effects.length; i++) {
       var e = game.effects[i];
-      var s = Render.project(e.x, e.y);
+      s = Render.project(e.x, e.y);
       if (!s) continue;
       var k = 1 - e.t / e.life;
-      ctx.globalAlpha = k * 0.9;
+      ctx.globalAlpha = k * 0.95;
       ctx.fillStyle = '#ffd27a';
-      var sz = 1 + k * 2;
-      ctx.fillRect(s.x - sz, s.y - sz, sz * 2, sz * 2);
-      ctx.globalAlpha = k * 0.5;
+      var ss = 2 + k * 4;
+      ctx.fillRect(s.x - ss, s.y - ss, ss * 2, ss * 2);
+      ctx.globalAlpha = k * 0.8;
       ctx.fillStyle = '#fff6d8';
-      ctx.fillRect(s.x - 1, s.y - 1, 2, 2);
+      ctx.fillRect(s.x - 1.5, s.y - 1.5, 3, 3);
+    }
+
+    /* 弹道线：从枪口（屏幕右下的枪管位置）拉到弹着点 */
+    for (i = 0; i < game.tracers.length; i++) {
+      var tr = game.tracers[i];
+      s = Render.project(tr.x1, tr.y1);
+      if (!s) continue;
+      var kk = 1 - tr.t / tr.life;
+      ctx.globalAlpha = kk * 0.75;
+      ctx.strokeStyle = '#ffe6a8';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(lastMuzzle.x || G.W * 0.8, lastMuzzle.y || G.H * 0.86);
+      ctx.lineTo(s.x, s.y);
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
   }
@@ -172,7 +212,7 @@
 
     if (player) {
       Render.drawWorld(player);
-      drawEffects(canvas.getContext('2d'));
+      drawShots(canvas.getContext('2d'));
       if (state === 'play') {
         drawGun(canvas.getContext('2d'), player);
         Hud.drawCrosshair(canvas.getContext('2d'), player, game);

@@ -28,23 +28,42 @@ var Hud = (function () {
     if (el.hint) el.hint.style.opacity = p.reloadT > 0 ? 1 : 0;
   }
 
-  /* 准星：随移动/后坐力扩张，命中时闪红 */
+  /* 准星：黑描边保证任何背景都看得清；命中时闪红并打 X */
   function drawCrosshair(ctx, p, g) {
     var cx = G.W / 2, cy = G.H / 2;
     var spread = 4 + p.moving * 5 + p.recoil * 7 + (p.reloadT > 0 ? 6 : 0);
-    var len = 4;
+    var len = 5;
     var hit = g.lastShot && g.lastShot.hit && (g.time - g.lastShot.t) < 0.09;
-    var col = hit ? 'rgba(255,90,80,0.95)' : 'rgba(210,255,225,0.85)';
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(cx - spread - len, cy + 0.5); ctx.lineTo(cx - spread, cy + 0.5);
-    ctx.moveTo(cx + spread, cy + 0.5); ctx.lineTo(cx + spread + len, cy + 0.5);
-    ctx.moveTo(cx + 0.5, cy - spread - len); ctx.lineTo(cx + 0.5, cy - spread);
-    ctx.moveTo(cx + 0.5, cy + spread); ctx.lineTo(cx + 0.5, cy + spread + len);
-    ctx.stroke();
-    ctx.fillStyle = col;
+
+    function ticks(color, w) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.moveTo(cx - spread - len, cy + 0.5); ctx.lineTo(cx - spread, cy + 0.5);
+      ctx.moveTo(cx + spread, cy + 0.5); ctx.lineTo(cx + spread + len, cy + 0.5);
+      ctx.moveTo(cx + 0.5, cy - spread - len); ctx.lineTo(cx + 0.5, cy - spread);
+      ctx.moveTo(cx + 0.5, cy + spread); ctx.lineTo(cx + 0.5, cy + spread + len);
+      ctx.stroke();
+    }
+
+    ticks('rgba(0,0,0,0.55)', 3);      // 外描边
+    ticks(hit ? '#ff4f45' : '#eafff2', 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(cx - 1, cy - 1, 2, 2);
+    ctx.fillStyle = hit ? '#ff4f45' : '#eafff2';
+    ctx.fillRect(cx - 0.5, cy - 0.5, 1, 1);
+
+    if (hit) {
+      ctx.strokeStyle = 'rgba(255,79,69,0.95)';
+      ctx.lineWidth = 1.4;
+      var r = 5;
+      ctx.beginPath();
+      ctx.moveTo(cx - r - 2, cy - r - 2); ctx.lineTo(cx - r, cy - r);
+      ctx.moveTo(cx + r, cy - r); ctx.lineTo(cx + r + 2, cy - r - 2);
+      ctx.moveTo(cx - r - 2, cy + r + 2); ctx.lineTo(cx - r, cy + r);
+      ctx.moveTo(cx + r, cy + r); ctx.lineTo(cx + r + 2, cy + r + 2);
+      ctx.stroke();
+    }
   }
 
   return { init: init, update: update, drawCrosshair: drawCrosshair };

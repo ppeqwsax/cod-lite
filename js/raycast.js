@@ -35,7 +35,7 @@ var Render = (function () {
   function makeLevels(t) {
     var levels = [];
     for (var l = 0; l < LEVELS; l++) {
-      var k = 0.18 + 0.82 * Math.pow(l / (LEVELS - 1), 0.85);
+      var k = 0.46 + 0.54 * Math.pow(l / (LEVELS - 1), 0.8);
       var arr = new Uint32Array(t.px.length);
       for (var i = 0; i < t.px.length; i++) {
         var c = t.px[i];
@@ -81,13 +81,18 @@ var Render = (function () {
     cam.horizon = H / 2 + (p.pitch || 0) * H;
   }
 
-  function project(wx, wy) {
+  function project(wx, wy, z) {
     var dx = wx / G.TILE - cam.px, dy = wy / G.TILE - cam.py;
     var invDet = 1 / (cam.planeX * cam.dirY - cam.dirX * cam.planeY);
     var tx = invDet * (cam.dirY * dx - cam.dirX * dy);
     var ty = invDet * (-cam.planeY * dx + cam.planeX * dy);
     if (ty <= 0.02) return null;
-    return { x: (W / 2) * (1 + tx / ty), depth: ty };
+    var hz = (z === undefined ? G.EYE : z);
+    return {
+      x: (W / 2) * (1 + tx / ty),
+      y: cam.horizon - (hz - G.EYE) * H / ty,
+      depth: ty
+    };
   }
 
   /* ---------- 主渲染 ---------- */
@@ -97,22 +102,20 @@ var Render = (function () {
     var dirX = cam.dirX, dirY = cam.dirY, planeX = cam.planeX, planeY = cam.planeY;
     var px = cam.px, py = cam.py;
 
-    /* 天花板：按行距离投射（只取上半屏） */
-    var ceilTex = tex.ceil, floorTex = tex.floor;
+    /* 天空：地平线以上画渐变（露天货场），地面用贴图投射 */
+    var floorTex = tex.floor;
+    var skyTopC = [58, 78, 104], skyHorC = [150, 166, 186];
     for (var y = 0; y < H; y++) {
       var row = y * W;
-      if (y < horizon && ceilTex) {
-        var d = H / Math.max(1, horizon - y);
-        var lvl = clamp((LEVELS - 1) - (d * 0.7) | 0, 1, LEVELS - 1) | 0;
-        var arr = ceilTex.levels[lvl];
-        var stepX = d * 2 * planeX / W, stepY = d * 2 * planeY / W;
-        var fx = px + d * (dirX - planeX), fy = py + d * (dirY - planeY);
-        for (var x = 0; x < W; x++) {
-          var tx = (fx * 64) & 63, ty = (fy * 64) & 63;
-          buf[row + x] = arr[(ty << 6) + tx];
-          fx += stepX; fy += stepY;
-        }
-      } else if (y >= horizon && floorTex) {
+      if (y < horizon) {
+        var kk = clamp(y / Math.max(1, horizon), 0, 1);
+        var col = rgb(
+          (skyTopC[0] + (skyHorC[0] - skyTopC[0]) * kk) | 0,
+          (skyTopC[1] + (skyHorC[1] - skyTopC[1]) * kk) | 0,
+          (skyTopC[2] + (skyHorC[2] - skyTopC[2]) * kk) | 0
+        );
+        for (var xs = 0; xs < W; xs++) buf[row + xs] = col;
+      } else if (floorTex) {
         var d2 = H / Math.max(1, y - horizon);
         var lvl2 = clamp((LEVELS - 1) - (d2 * 0.7) | 0, 1, LEVELS - 1) | 0;
         var arr2 = floorTex.levels[lvl2];
@@ -124,7 +127,7 @@ var Render = (function () {
           fx2 += stepX2; fy2 += stepY2;
         }
       } else {
-        for (var x3 = 0; x3 < W; x3++) buf[row + x3] = (y < horizon ? skyTop : skyBot);
+        for (var x3 = 0; x3 < W; x3++) buf[row + x3] = skyBot;
       }
     }
 
@@ -152,10 +155,13 @@ var Render = (function () {
       var perp = side === 0 ? (sideDistX - deltaX) : (sideDistY - deltaY);
       if (perp < 0.02) perp = 0.02;
 
-      var lineH = (H * WALLH) / perp;
-      var drawStart = horizon - lineH / 2;
+      /* 墙高按格子类型变化：围栏矮、集装箱高；脚踩地面，所以上下沿都跟着算 */
+      var wh = MapData.h(mapX, mapY) || WALLH;
+      var half = G.EYE * H / perp;                 // 眼睛高度到地面 / 到墙顶的像素量
+      var lineH = wh * H / perp;
+      var drawStart = horizon + half - lineH;      // 墙顶
       var y0 = Math.max(0, drawStart | 0);
-      var y1 = Math.min(H - 1, (drawStart + lineH) | 0);
+      var y1 = Math.min(H - 1, (horizon + half) | 0);
 
       var t = tex[TEXNAME(MapData.at(mapX, mapY))];
       if (!t) continue;

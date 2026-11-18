@@ -43,7 +43,12 @@ var Input = (function () {
     });
 
     canvas.addEventListener('mousedown', function (e) {
-      if (!state.locked) { lock(); return; }
+      if (!state.locked) {
+        lock();
+        /* 抢锁的这一次点击也当成开火，不然第一枪永远"没反应" */
+        if (e.button === 0) state.fire = true;
+        return;
+      }
       if (e.button === 0) state.fire = true;
       if (e.button === 2) state.aim = true;
     });
@@ -66,6 +71,12 @@ var Input = (function () {
   }
 
   function lock() {
+    /* ?nolock=1 给自动化测试用：不抢真实鼠标指针 */
+    if (/[?&]nolock=1/.test(location.search)) {
+      state.locked = true;
+      if (onLock) onLock(true);
+      return;
+    }
     if (canvasEl && canvasEl.requestPointerLock) canvasEl.requestPointerLock();
   }
   function unlock() {

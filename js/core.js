@@ -49,5 +49,5 @@ var WEAPONS = {
 
 /* 贴图 id（与 map.js 的格子值一致） */
 var TEX = {
-  NONE: 0, RED: 1, BLUE: 2, GREEN: 3, CRATE: 4, METAL: 5, DOOR: 6, FLOOR: 7, CEIL: 8
+  NONE: 0, RED: 1, BLUE: 2, GREEN: 3, CRATE: 4, METAL: 5, DOOR: 6, FLOOR: 7, CEIL: 8, FENCE: 9
 };
