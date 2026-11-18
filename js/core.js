@@ -19,13 +19,16 @@ var G = {
   EYE_SLIDE: 0.85,   // 滑铲眼睛高度
   BODY_H: 1.78,      // 人物身高（米，给视野判定用）
   R: 0.24,           // 玩家碰撞半径（格）
-  WALK: 3.6,         // 米/秒
-  SPRINT: 5.6,       // 冲刺
-  SLIDE_SPEED: 8.2,  // 滑铲初速
-  SLIDE_TIME: 0.62,  // 滑铲时长
-  JUMP_V: 4.9,       // 起跳初速（米/秒）
-  GRAV: 15.5,        // 重力
-  ACCEL: 16,
+  WALK: 3.9,         // 米/秒
+  SPRINT: 6.5,       // 冲刺
+  SLIDE_SPEED: 9.4,  // 滑铲初速
+  SLIDE_TIME: 0.72,  // 滑铲时长
+  JUMP_V: 5.5,       // 起跳初速（米/秒）
+  GRAV: 16.5,        // 重力
+  ACCEL: 17,
+  AIR_ACCEL: 0.55,
+  SLIDE_JUMP_BOOST: 1.12,
+  SLIDE_JUMP_TIME: 0.5,
   FRICTION: 12,
   MOUSE: 0.0024,     // 每像素转角（弧度）
   PITCH_MAX: 0.55,   // 伪俯仰上限（越大越能抬枪打高处）

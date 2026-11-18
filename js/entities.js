@@ -33,6 +33,7 @@ function Player(spawn) {
   this.kills = 0;
   this.deaths = 0;
   this.respawnT = 0;
+  this.hopT = 0;
 }
 
 Player.prototype.def = function () { return WEAPONS[this.weapon]; };

@@ -75,6 +75,7 @@ var Sim = (function () {
       match: { target: 25, limit: 300, left: 300, over: false, player: 0, bot: 0 }
     };
     g.players.push(new Player(MapData.spawns[0]));
+    g.players[0].side = 0;
     return g;
   }
 
@@ -102,8 +103,21 @@ var Sim = (function () {
       p.hp = 0;
       p.alive = false;
       p.respawnT = 3;
-      g.match.bot++;
-      if (by) by.kills++;
+      p.deaths = (p.deaths || 0) + 1;
+      if (by) {
+        by.kills = (by.kills || 0) + 1;
+        addScore(g, by.side || 0);
+      } else {
+        addScore(g, 1 - (p.side || 0));
+      }
+    }
+  }
+
+  function addScore(g, side) {
+    if (side === 0) g.match.player++;
+    else g.match.bot++;
+    if (g.match.player >= g.match.target || g.match.bot >= g.match.target) {
+      g.match.over = true;
     }
   }
 
@@ -143,21 +157,41 @@ var Sim = (function () {
     var res = castRay3(p.x, p.y, eyeZ, p.pitch, ang, def.range);
     g.shots++;
 
-    /* 先看有没有打到 bot（比弹着点近、且弹道高度落在他身上才算） */
-    var hitBot = null, hitT = res.hit ? res.dist : def.range;
-    for (var i = 0; i < g.bots.length; i++) {
-      var b = g.bots[i];
-      if (!b.alive) continue;
-      var vx = b.x - p.x, vy = b.y - p.y;
+    /* 先看有没有打到人（bot 或另一名玩家）：比弹着点近、且弹道高度落在身上才算 */
+    var hitBot = null, hitPl = null, hitT = res.hit ? res.dist : def.range;
+    function testTarget(o) {
+      if (!o.alive) return;
+      var vx = o.x - p.x, vy = o.y - p.y;
       var t = vx * Math.cos(ang) + vy * Math.sin(ang);
-      if (t <= 0 || t > hitT) continue;
-      if (Math.abs(vx * Math.sin(ang) - vy * Math.cos(ang)) > 0.55) continue;
-      var zAtB = eyeZ + p.pitch * (t / G.TILE);
-      if (zAtB > (b.z || 0) + 1.75 || zAtB < (b.z || 0) - 0.1) continue;
-      hitT = t; hitBot = b;
+      if (t <= 0 || t > hitT) return;
+      if (Math.abs(vx * Math.sin(ang) - vy * Math.cos(ang)) > 0.55) return;
+      var zAt = eyeZ + p.pitch * (t / G.TILE);
+      if (zAt > (o.z || 0) + 1.75 || zAt < (o.z || 0) - 0.1) return;
+      hitT = t;
+      if (o.def) { hitPl = o; hitBot = null; } else { hitBot = o; hitPl = null; }
+    }
+    for (var i = 0; i < g.bots.length; i++) testTarget(g.bots[i]);
+    for (var pi = 0; pi < g.players.length; pi++) {
+      if (g.players[pi] !== p) testTarget(g.players[pi]);
     }
 
-    if (hitBot) {
+    if (hitPl) {
+      /* 打中另一名玩家 */
+      g.hits++;
+      g.botHits = (g.botHits || 0) + 1;
+      var pz = (hitPl.z || 0) + 1.15;
+      addEffect(g, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT, pz, 'spark');
+      addTracer(g, p.x, p.y, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT, pz);
+      var wasAlive = hitPl.alive;
+      hitPlayer(g, hitPl, def.dmg, p);
+      g.lastHit = { t: g.time, kill: wasAlive && !hitPl.alive };
+      if (wasAlive && !hitPl.alive) {
+        g.lastKill = { t: g.time, headshot: false, streak: 1, x: hitPl.x, y: hitPl.y, z: hitPl.z || 0 };
+        g.lastKillAt = g.time;
+        if (!g.deathMarks) g.deathMarks = [];
+        g.deathMarks.push({ x: hitPl.x, y: hitPl.y, z: hitPl.z || 0, t: g.time, head: false });
+      }
+    } else if (hitBot) {
       g.hits++;
       g.botHits = (g.botHits || 0) + 1;
       g.lastHit = { t: g.time, kill: false };
@@ -170,10 +204,11 @@ var Sim = (function () {
         hitBot.hp = 0;
         hitBot.alive = false;
         hitBot.respawnT = 3;
-        g.match.player++;
+        addScore(g, 0);
         p.kills = (p.kills || 0) + 1;
 
         /* ---- 击杀反馈数据 ---- */
+        var zAtB = eyeZ + p.pitch * (hitT / G.TILE);
         var headshot = zAtB > (hitBot.z || 0) + 1.45;
         if (!g.lastKillAt || g.time - g.lastKillAt > 3.5) g.killStreak = 0;
         g.killStreak = (g.killStreak || 0) + 1;
@@ -220,10 +255,10 @@ var Sim = (function () {
     p.reserve[p.weapon] -= take;
   }
 
-  function step(g, p, dt, input) {
+  /* 推进比赛：计时、结束判定、所有人复活、特效寿命 */
+  function tickMatch(g, dt) {
     g.time += dt;
 
-    /* 比赛计时 + 结束判定 */
     var m = g.match;
     if (!m.over) {
       m.left -= dt;
@@ -233,12 +268,39 @@ var Sim = (function () {
       }
     }
 
-    /* 玩家死亡 → 复活倒计时 */
-    if (!p.alive) {
-      p.respawnT -= dt;
-      if (p.respawnT <= 0) respawnPlayer(g, p);
-      return;
+    for (var q = 0; q < g.players.length; q++) {
+      var pl = g.players[q];
+      if (!pl.alive) {
+        pl.respawnT -= dt;
+        if (pl.respawnT <= 0) respawnPlayer(g, pl);
+      }
     }
+
+    ageEffects(g, dt);
+  }
+
+  function ageEffects(g, dt) {
+    for (var i = g.effects.length - 1; i >= 0; i--) {
+      var e = g.effects[i];
+      e.t += dt;
+      if (e.t >= e.life) g.effects.splice(i, 1);
+    }
+    for (var j = g.tracers.length - 1; j >= 0; j--) {
+      var tr = g.tracers[j];
+      tr.t += dt;
+      if (tr.t >= tr.life) g.tracers.splice(j, 1);
+    }
+    for (var k2 = g.decals.length - 1; k2 >= 0; k2--) {
+      var dc = g.decals[k2];
+      dc.t += dt;
+      if (dc.t >= dc.life) g.decals.splice(k2, 1);
+    }
+  }
+
+  /* 单步推进一名玩家（不含计时/复活/特效寿命，联机时由房主对两人分别调用） */
+  function stepPlayer(g, p, dt, input) {
+    input = input || {};
+    if (!p.alive) return;
 
     /* 视角 */
     p.angle = normAngle(p.angle + input.mouseDX * G.MOUSE);
@@ -263,8 +325,19 @@ var Sim = (function () {
     p.crouch = !!input.crouch && p.slideT <= 0;
 
     if (input.jump && p.onGround) {
+      var wasSlide = p.slideT > 0;
       p.vz = G.JUMP_V;
       p.onGround = false;
+      if (wasSlide) {
+        /* 滑铲接跳：把滑铲动量带进空中，手感更顺 */
+        var sp0 = Math.hypot(p.vx, p.vy);
+        var lim = G.SLIDE_SPEED * G.SLIDE_JUMP_BOOST;
+        if (sp0 > 0.5) {
+          var sc2 = Math.min(lim, sp0 * G.SLIDE_JUMP_BOOST) / sp0;
+          p.vx *= sc2; p.vy *= sc2;
+        }
+        p.hopT = G.SLIDE_JUMP_TIME;
+      }
       p.slideT = 0;
     }
     if (!p.onGround) {
@@ -296,14 +369,16 @@ var Sim = (function () {
       p.vy -= p.vy * sf * 0.45;
     } else {
       var tvx = wishX * speed, tvy = wishY * speed;
-      var k = clamp(G.ACCEL * dt, 0, 1) * (p.onGround ? 1 : 0.35);
+      var k = clamp(G.ACCEL * dt, 0, 1) * (p.onGround ? 1 : G.AIR_ACCEL);
+      if (p.hopT > 0) k *= 1.3;          /* 滑铲跳的滞空期转向更跟手 */
       p.vx += (tvx - p.vx) * k;
       p.vy += (tvy - p.vy) * k;
-      if (!fwd && !strafe) {
+      if (!fwd && !strafe && p.onGround) {
         var f = clamp(G.FRICTION * dt, 0, 1);
         p.vx -= p.vx * f; p.vy -= p.vy * f;
       }
     }
+    if (p.hopT > 0) p.hopT -= dt;
 
     var nx = p.x + p.vx * dt;
     if (!MapData.blocked(nx, p.y, G.R)) p.x = nx; else p.vx = 0;
@@ -329,28 +404,19 @@ var Sim = (function () {
     if (p.alive && p.hp < G.MAX_HP && g.time - p.hurtAt > G.REGEN_DELAY) {
       p.hp = Math.min(G.MAX_HP, p.hp + G.REGEN_RATE * dt);
     }
+  }
 
-    /* 特效寿命 */
-    for (var i = g.effects.length - 1; i >= 0; i--) {
-      var e = g.effects[i];
-      e.t += dt;
-      if (e.t >= e.life) g.effects.splice(i, 1);
-    }
-    for (var j = g.tracers.length - 1; j >= 0; j--) {
-      var tr = g.tracers[j];
-      tr.t += dt;
-      if (tr.t >= tr.life) g.tracers.splice(j, 1);
-    }
-    for (var k2 = g.decals.length - 1; k2 >= 0; k2--) {
-      var dc = g.decals[k2];
-      dc.t += dt;
-      if (dc.t >= dc.life) g.decals.splice(k2, 1);
-    }
+  function step(g, p, dt, input) {
+    tickMatch(g, dt);
+    stepPlayer(g, p, dt, input);
   }
 
   return {
     newGame: newGame,
     step: step,
+    stepPlayer: stepPlayer,
+    tickMatch: tickMatch,
+    ageEffects: ageEffects,
     castRay: castRay,
     castRay3: castRay3,
     startReload: startReload,

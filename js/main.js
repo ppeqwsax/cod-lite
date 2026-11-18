@@ -56,6 +56,9 @@
       get game() { return game; },
       get player() { return player; },
       get state() { return state; },
+      get net() { return net; },
+      get remoteIn() { return remoteIn; },
+      get inCount() { return inCount; },
       start: startGame
     };
   }
@@ -69,6 +72,10 @@
 
   function startGame() {
     if (!player) return;
+    if (online) { endOnline(); }
+    if (game.players.length > 1) game.players.length = 1;
+    game.remotes = null;
+    player = game.players[0];
     player.respawn(MapData.spawns[0]);
     game.time = 0;
     game.effects.length = 0;
@@ -97,14 +104,25 @@
       return;
     }
     if (state === 'play') {
+      if (online) { setStatus('点击画面继续'); return; }   /* 联机不暂停，避免和对手不同步 */
       state = 'pause';
       show(pauseEl, true);
       setStatus('已暂停');
     }
   }
 
-  startBtn.addEventListener('click', startGame);
-  againBtn.addEventListener('click', startGame);
+  startBtn.addEventListener('click', function () {
+    if (onlineMode) {
+      var code = (roomInput && roomInput.value || '').toUpperCase().trim();
+      if (code) joinRoom(code); else createRoom();
+      return;
+    }
+    startGame();
+  });
+  againBtn.addEventListener('click', function () {
+    if (online) { show(resultEl, false); state = 'play'; game.match.over = false; game.match.player = 0; game.match.bot = 0; game.match.left = 300; overSent = false; game.players[0].respawn(MapData.spawns[0]); game.players[1].respawn(MapData.spawns[1]); Input.lock(); return; }
+    startGame();
+  });
 
   var diffBtns = document.querySelectorAll('.chip[data-diff]');
   for (var di = 0; di < diffBtns.length; di++) {
@@ -113,6 +131,40 @@
       for (var k = 0; k < diffBtns.length; k++) diffBtns[k].classList.toggle('on', diffBtns[k] === this);
     });
   }
+
+  /* ---------- 模式 / 房间 ---------- */
+  var onlineMode = false;
+  var modeSolo = document.getElementById('modeSolo');
+  var modeOnline = document.getElementById('modeOnline');
+  var onlineBox = document.getElementById('onlineBox');
+  var roomInput = document.getElementById('roomInput');
+  var createBtn = document.getElementById('createBtn');
+  var joinBtn = document.getElementById('joinBtn');
+  var soloDiff = document.querySelectorAll('.solo-only');
+
+  function setMode(online_) {
+    onlineMode = online_;
+    if (modeSolo) modeSolo.classList.toggle('on', !online_);
+    if (modeOnline) modeOnline.classList.toggle('on', online_);
+    if (onlineBox) onlineBox.classList.toggle('hidden', !online_);
+    for (var i = 0; i < soloDiff.length; i++) soloDiff[i].classList.toggle('hidden', online_);
+    if (startBtn) startBtn.textContent = online_ ? '开始联机' : '进入训练场';
+    if (online_ && !onlineTest) netSet('输入房间码加入，或直接创建房间');
+  }
+
+  var onlineTest = /[?&]online=1/.test(location.search);
+  if (modeSolo) modeSolo.addEventListener('click', function () { if (!online) setMode(false); });
+  if (modeOnline) modeOnline.addEventListener('click', function () { if (!online) setMode(true); });
+  if (createBtn) createBtn.addEventListener('click', function () { if (!online) createRoom(); });
+  if (joinBtn) joinBtn.addEventListener('click', function () {
+    if (online) return;
+    var code = (roomInput && roomInput.value || '').toUpperCase().trim();
+    if (code) joinRoom(code); else netSet('先输入 5 位房间码');
+  });
+  if (roomInput) roomInput.addEventListener('input', function () {
+    this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+  });
+  if (onlineTest) setMode(true);
   resumeBtn.addEventListener('click', function () {
     show(pauseEl, false);
     Input.lock();
@@ -135,7 +187,7 @@
     /* 开镜：枪体向画面中央抬起、摆正，抖动也随之减小 */
     var ads = p.ads || 0;
     if (ads > 0) {
-      var adsX = G.W * 0.5 - gw * 0.90, adsY = G.H * 0.35;
+      var adsX = G.W * 0.5 - gw * 0.5, adsY = G.H * 0.50;
       x = x + (adsX - x) * ads;
       y = y + (adsY - y) * ads;
       rot = rot * (1 - ads);
@@ -236,8 +288,10 @@
   /* ---------- 敌人（billboard 贴片） ---------- */
   function drawBots(ctx) {
     var p = player;
-    for (var i = 0; i < game.bots.length; i++) {
-      var b = game.bots[i];
+    var actors = game.bots ? game.bots.slice() : [];
+    if (game.remotes) actors = actors.concat(game.remotes);
+    for (var i = 0; i < actors.length; i++) {
+      var b = actors[i];
       if (!b.alive) continue;
       var dx = b.x - p.x, dy = b.y - p.y;
       var d = Math.hypot(dx, dy);
@@ -374,6 +428,28 @@
     ctx.stroke();
 
     /* 敌人红点：扫到后定住位置不消失，直到下次扫描更新 */
+    var foes = game.remotes || [];
+    for (var fi = 0; fi < foes.length; fi++) {
+      var fp = foes[fi];
+      if (!fp.alive) continue;
+      var fdx = fp.x - player.x, fdy = fp.y - player.y;
+      if (Math.hypot(fdx, fdy) > 14) continue;
+      var frot = -player.angle - Math.PI / 2;
+      var frx = fdx * Math.cos(frot) - fdy * Math.sin(frot);
+      var fry = fdx * Math.sin(frot) + fdy * Math.cos(frot);
+      if (Math.hypot(frx, fry) > S * 0.5) continue;
+      var fpx = frx * scale, fpy = fry * scale;
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = '#ff2d2d';
+      ctx.beginPath(); ctx.arc(fpx, fpy, 7.5, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ff3b3b';
+      ctx.beginPath(); ctx.arc(fpx, fpy, 3.2, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,120,120,0.85)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.arc(fpx, fpy, 3.2, 0, Math.PI * 2); ctx.stroke();
+    }
+
     for (var i = 0; i < game.bots.length; i++) {
       var b = game.bots[i];
       if (!b.alive || !b.lastSeen) continue;
@@ -448,8 +524,10 @@
     var tEl = document.getElementById('timer');
     if (tEl) tEl.textContent = mm + ':' + (ss < 10 ? '0' : '') + ss;
     var sp = document.getElementById('scoreP'), sb = document.getElementById('scoreB');
-    if (sp) sp.textContent = m.player;
-    if (sb) sb.textContent = m.bot;
+    var mine = online && mySide === 1 ? m.bot : m.player;
+    var theirs = online && mySide === 1 ? m.player : m.bot;
+    if (sp) sp.textContent = mine;
+    if (sb) sb.textContent = theirs;
 
     if (!player.alive && !m.over) {
       show(deadEl, true);
@@ -461,10 +539,11 @@
     if (m.over && state === 'play') {
       state = 'over';
       Input.unlock();
-      var win = m.player > m.bot;
-      resultTitle.textContent = win ? '胜 利' : '失 败';
-      resultTitle.style.color = win ? '#8be08a' : '#ff6b5e';
-      resultSub.textContent = '比分 ' + m.player + ' : ' + m.bot + (m.left <= 0 ? '（时间到）' : '');
+      var win = mine > theirs;
+      var draw = mine === theirs;
+      resultTitle.textContent = draw ? '平 局' : (win ? '胜 利' : '失 败');
+      resultTitle.style.color = draw ? '#ffc451' : (win ? '#8be08a' : '#ff6b5e');
+      resultSub.textContent = '比分 ' + mine + ' : ' + theirs + (m.left <= 0 ? '（时间到）' : '');
       show(resultEl, true);
       setStatus('对局结束');
     }
@@ -540,33 +619,227 @@
     }
   }
 
+  /* ============================================================
+     联机 1v1
+     房主：跑完整模拟（两名玩家），20Hz 发快照
+     客机：本地预测自己，30Hz 发输入，收到快照后校正/插值
+     ============================================================ */
+  var net = null, online = false, mySide = 0, remoteIn = {}, overSent = false, inCount = 0;
+  var snapAcc = 0, inAcc = 0, pingAcc = 0;
+
+  function netSet(txt) {
+    var el = document.getElementById('netStatus');
+    if (el) el.textContent = txt;
+  }
+
+  function packInput(inp) {
+    return {
+      w: inp.keyW ? 1 : 0, s: inp.keyS ? 1 : 0, a: inp.keyA ? 1 : 0, d: inp.keyD ? 1 : 0,
+      sh: inp.shift ? 1 : 0, jp: inp.jump ? 1 : 0, cr: inp.crouch ? 1 : 0,
+      f: inp.fire ? 1 : 0, r: inp.reload ? 1 : 0, ai: inp.aim ? 1 : 0,
+      pk: inp.pick || 0, mx: inp.mouseDX || 0, my: inp.mouseDY || 0
+    };
+  }
+
+  function unpackInput(o) {
+    o = o || {};
+    return {
+      keyW: !!o.w, keyS: !!o.s, keyA: !!o.a, keyD: !!o.d,
+      shift: !!o.sh, jump: !!o.jp, crouch: !!o.cr,
+      fire: !!o.f, reload: !!o.r, aim: !!o.ai,
+      pick: o.pk | 0, mouseDX: o.mx || 0, mouseDY: o.my || 0
+    };
+  }
+
+  function packPlayer(p) {
+    return {
+      x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2),
+      a: +p.angle.toFixed(3), p: +p.pitch.toFixed(3),
+      hp: Math.round(p.hp), al: p.alive ? 1 : 0, ads: +(p.ads || 0).toFixed(2),
+      wp: p.weapon === 'pistol' ? 1 : 0, mz: p.muzzle > 0 ? 1 : 0
+    };
+  }
+
+  function packSnapshot() {
+    var m = game.match;
+    return {
+      l: +m.left.toFixed(2), p: m.player, b: m.bot, o: m.over ? 1 : 0,
+      ps: [packPlayer(game.players[0]), packPlayer(game.players[1])]
+    };
+  }
+
+  function applySnapshot(d) {
+    if (!d || !d.ps) return;
+    var m = game.match;
+    m.left = d.l; m.player = d.p; m.bot = d.b; m.over = !!d.o;
+
+    for (var i = 0; i < 2; i++) {
+      var s = d.ps[i], pl = game.players[i];
+      if (!s || !pl) continue;
+      if (i === mySide) {
+        /* 自己：轻微校正，误差过大才硬同步 */
+        pl.hp = s.hp;
+        pl.alive = !!s.al;
+        var err = Math.hypot(s.x - pl.x, s.y - pl.y);
+        if (!s.al || err > 1.8) {
+          pl.x = s.x; pl.y = s.y; pl.z = s.z; pl.vx = 0; pl.vy = 0;
+        } else {
+          pl.x += (s.x - pl.x) * 0.22;
+          pl.y += (s.y - pl.y) * 0.22;
+          pl.z += (s.z - pl.z) * 0.35;
+        }
+      } else {
+        /* 对手：直接采用权威状态 */
+        pl.x = s.x; pl.y = s.y; pl.z = s.z;
+        pl.angle = s.a; pl.pitch = s.p;
+        pl.hp = s.hp; pl.alive = !!s.al;
+        pl.ads = s.ads;
+        pl.weapon = s.wp ? 'pistol' : 'rifle';
+        pl.muzzle = s.mz ? 0.05 : Math.max(0, (pl.muzzle || 0));
+        pl.walk = (pl.walk || 0) + 0.4;
+      }
+    }
+  }
+
+  function startOnlineBattle(role) {
+    mySide = role === 'host' ? 0 : 1;
+    online = true;
+    overSent = false;
+    remoteIn = {};
+    game = Sim.newGame();
+    var p2 = new Player(MapData.spawns[1]);
+    p2.side = 1;
+    game.players.push(p2);
+    game.players[0].side = 0;
+    player = game.players[mySide];
+    game.bots = [];
+    game.remotes = [game.players[1 - mySide]];
+    game.match = { target: 25, limit: 300, left: 300, over: false, player: 0, bot: 0 };
+    radarNext = 0;
+    bumpedKillAt = -1;
+    state = 'play';
+    Sfx.unlock();
+    show(menuEl, false);
+    show(pauseEl, false);
+    show(resultEl, false);
+    show(deadEl, false);
+    setStatus(role === 'host' ? '房主 · 对局中' : '客机 · 对局中');
+    Input.lock();
+  }
+
+  function createRoom() {
+    if (net) { net.close(); net = null; }
+    net = Net.host({
+      peer: function () {
+        netSet('对手已连接，开始！');
+        mySide = 0;
+        if (state === 'menu') startOnlineBattle('host');
+      },
+      start: function () { },
+      link: function (l) {
+        netSet(l === 'direct' ? '直连已建立' : (l === 'relay' ? '中转模式（延迟略高）' : '正在连接…'));
+      },
+      msg: function (m) {
+        if (m.t === 'in') { remoteIn = m.d; inCount++; }
+        else if (m.t === 'bye') { netSet('对手离开了'); endOnline(); }
+      }
+    });
+    netSet('房间码 ' + net.room + ' · 等待对手…');
+    var inp = document.getElementById('roomInput');
+    if (inp) inp.value = net.room;
+  }
+
+  function joinRoom(code) {
+    if (!code) { netSet('先输入房间码'); return; }
+    if (net) { net.close(); net = null; }
+    net = Net.join(code, {
+      peer: function () { },
+      start: function () {
+        netSet('已连接，开始！');
+        if (state === 'menu') startOnlineBattle('guest');
+      },
+      link: function (l) {
+        netSet(l === 'direct' ? '直连已建立' : (l === 'relay' ? '中转模式（延迟略高）' : '正在连接 ' + code + '…'));
+      },
+      msg: function (m) {
+        if (m.t === 'snap') applySnapshot(m.d);
+        else if (m.t === 'bye') { netSet('对手离开了'); endOnline(); }
+      }
+    });
+    netSet('正在加入 ' + code + '…');
+  }
+
+  function endOnline() {
+    online = false;
+    if (net) { net.close(); net = null; }
+    state = 'menu';
+    show(menuEl, true);
+    show(resultEl, false);
+    show(deadEl, false);
+    Input.unlock();
+    setStatus('菜单');
+  }
+
+  function onlineFrame(dt) {
+    var inp = Input.read();
+    if (inp.pick === 0 && player.weapon !== 'rifle') player.weapon = 'rifle';
+    else if (inp.pick === 1 && player.weapon !== 'pistol') player.weapon = 'pistol';
+
+    if (net && net.role === 'host') {
+      Sim.tickMatch(game, dt);
+      Sim.stepPlayer(game, game.players[0], dt, inp);
+      Sim.stepPlayer(game, game.players[1], dt, unpackInput(remoteIn));
+      snapAcc += dt;
+      if (snapAcc >= 1 / 20) { snapAcc = 0; net._send({ t: 'snap', d: packSnapshot() }); }
+      if (game.match.over && !overSent) { overSent = true; net._send({ t: 'over', d: { p: game.match.player, b: game.match.bot } }); }
+    } else if (net && net.role === 'guest') {
+      /* 自己先本地跑一遍，手感立刻有反馈 */
+      Sim.stepPlayer(game, player, dt, inp);
+      Sim.ageEffects(game, dt);
+      inAcc += dt;
+      if (inAcc >= 1 / 30) { inAcc = 0; net._send({ t: 'in', d: packInput(inp) }); }
+    }
+
+    pingAcc += dt;
+    if (pingAcc >= 1) { pingAcc = 0; if (net) net.ping(); }
+
+    var linkTxt = net ? (net.link === 'direct' ? '直连' : (net.link === 'relay' ? '中转' : '连接中')) : '';
+    setStatus((mySide === 0 ? '房主' : '客机') + ' · ' + linkTxt + (net && net.rtt ? ' · ' + net.rtt + 'ms' : ''));
+    updateRadar(dt);
+    updateMatchUI();
+  }
+
   function frame(now) {    requestAnimationFrame(frame);
     if (!last) last = now;
     var dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
     if (state === 'play' && player) {
-      var input = Input.read();
-      if (input.pick === 0) player.weapon = 'rifle';
-      else if (input.pick === 1) player.weapon = 'pistol';
-      var s0 = game.shots, bh0 = game.botHits || 0, k0 = game.match.player;
-      var lk0 = game.lastKill ? game.lastKill.t : -1;
-      var hp0 = player.hp, rl0 = player.reloadT;
-      Sim.step(game, player, dt, input);
-      for (var bi = 0; bi < game.bots.length; bi++) {
-        if (!game.match.over) Bot.update(dt, game.bots[bi], game, player);
+      if (online) {
+        onlineFrame(dt);
+      } else {
+        var input = Input.read();
+        if (input.pick === 0) player.weapon = 'rifle';
+        else if (input.pick === 1) player.weapon = 'pistol';
+        var s0 = game.shots, bh0 = game.botHits || 0, k0 = game.match.player;
+        var lk0 = game.lastKill ? game.lastKill.t : -1;
+        var hp0 = player.hp, rl0 = player.reloadT;
+        Sim.step(game, player, dt, input);
+        for (var bi = 0; bi < game.bots.length; bi++) {
+          if (!game.match.over) Bot.update(dt, game.bots[bi], game, player);
+        }
+        /* 音效 */
+        if (game.shots > s0) Sfx.shot(player.weapon);
+        if ((game.botHits || 0) > bh0) Sfx.hit();
+        if (game.match.player > k0 || (game.lastKill && game.lastKill.t !== lk0)) {
+          var spEl = document.getElementById('scoreP');
+          if (spEl) { spEl.classList.remove('bump'); void spEl.offsetWidth; spEl.classList.add('bump'); }
+        }
+        if (player.hp < hp0 - 0.5) Sfx.hurt();
+        if (player.reloadT > 0 && rl0 === 0) Sfx.reload();
+        updateRadar(dt);
+        updateMatchUI();
       }
-      /* 音效 */
-      if (game.shots > s0) Sfx.shot(player.weapon);
-      if ((game.botHits || 0) > bh0) Sfx.hit();
-      if (game.match.player > k0 || (game.lastKill && game.lastKill.t !== lk0)) {
-        var spEl = document.getElementById('scoreP');
-        if (spEl) { spEl.classList.remove('bump'); void spEl.offsetWidth; spEl.classList.add('bump'); }
-      }
-      if (player.hp < hp0 - 0.5) Sfx.hurt();
-      if (player.reloadT > 0 && rl0 === 0) Sfx.reload();
-      updateRadar(dt);
-      updateMatchUI();
     } else {
       Input.read();
     }

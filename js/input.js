@@ -32,7 +32,6 @@ var Input = (function () {
     else if (c === 'KeyS') state.keyS = false;
     else if (c === 'KeyD') state.keyD = false;
     else if (c === 'ShiftLeft' || c === 'ShiftRight') state.shift = false;
-    else if (c === 'Space') state.jump = false;
     else if (c === 'ControlLeft' || c === 'ControlRight' || c === 'KeyC') state.crouch = false;
   }
 
@@ -98,6 +97,7 @@ var Input = (function () {
     };
     state.mouseDX = 0; state.mouseDY = 0;
     state.reload = false;
+    state.jump = false;   // 跳跃是边沿触发：按下即被消费，快速点按不会丢
     state.pick = -1;
     return out;
   }

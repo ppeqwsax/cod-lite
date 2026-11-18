@@ -176,3 +176,14 @@ kbd {
   30% { transform: scale(1.55); color: #ffd34d; }
   100% { transform: scale(1); }
 }
+
+/* 联机房间 UI */
+.online-box { margin: 10px 0 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.online-box .row { display: flex; gap: 8px; }
+#roomInput { width: 132px; text-align: center; letter-spacing: 3px; font: 600 15px/1 ui-monospace, monospace;
+  color: #ffd98a; background: #171d24; border: 1px solid #38424d; border-radius: 6px; padding: 9px 10px; outline: none; text-transform: uppercase; }
+#roomInput:focus { border-color: #c9a227; }
+.btn2 { font: 600 13px/1 inherit; color: #e8eef4; background: #232b34; border: 1px solid #3d4854;
+  border-radius: 6px; padding: 9px 14px; cursor: pointer; letter-spacing: 1px; }
+.btn2:hover { background: #2c3540; border-color: #59677a; }
+.net { min-height: 16px; font: 12px/1.5 ui-monospace, monospace; color: #8fb2c9; text-align: center; max-width: 320px; }
