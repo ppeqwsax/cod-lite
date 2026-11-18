@@ -165,6 +165,17 @@
     this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
   });
   if (onlineTest) setMode(true);
+
+  /* 邀请链接：?room=ABCDE 自动进房 */
+  var inviteCode = (function () {
+    var m = /[?&]room=([A-Za-z0-9]{3,8})/.exec(location.search);
+    return m ? m[1].toUpperCase() : '';
+  })();
+  if (inviteCode) {
+    setMode(true);
+    if (roomInput) roomInput.value = inviteCode;
+    setTimeout(function () { if (!online) joinRoom(inviteCode); }, 900);
+  }
   resumeBtn.addEventListener('click', function () {
     show(pauseEl, false);
     Input.lock();
@@ -747,6 +758,12 @@
     netSet('房间码 ' + net.room + ' · 等待对手…');
     var inp = document.getElementById('roomInput');
     if (inp) inp.value = net.room;
+    /* 给一个可以直接发朋友的邀请链接（同源 + ?room=码） */
+    var shareEl = document.getElementById('shareLink');
+    if (shareEl) {
+      shareEl.textContent = location.origin + location.pathname + '?room=' + net.room;
+      shareEl.classList.remove('hidden');
+    }
   }
 
   function joinRoom(code) {
@@ -802,6 +819,14 @@
 
     pingAcc += dt;
     if (pingAcc >= 1) { pingAcc = 0; if (net) net.ping(); }
+
+    /* 对手掉线：8 秒收不到任何包就退出联机 */
+    if (net && net.stallMs() > 8000) {
+      netSet('与对手的连接中断了');
+      endOnline();
+      setStatus('连接中断');
+      return;
+    }
 
     var linkTxt = net ? (net.link === 'direct' ? '直连' : (net.link === 'relay' ? '中转' : '连接中')) : '';
     setStatus((mySide === 0 ? '房主' : '客机') + ' · ' + linkTxt + (net && net.rtt ? ' · ' + net.rtt + 'ms' : ''));
