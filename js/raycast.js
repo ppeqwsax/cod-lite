@@ -124,9 +124,16 @@ var Render = (function () {
         var arr2 = floorTex.levels[lvl2];
         var stepX2 = d2 * 2 * planeX / W, stepY2 = d2 * 2 * planeY / W;
         var fx2 = px + d2 * (dirX - planeX), fy2 = py + d2 * (dirY - planeY);
+        /* 每 4 米一条水泥伸缩缝，给空旷地面一点纵深参照 */
+        var seam = rgb(96, 96, 102);
         for (var x2 = 0; x2 < W; x2++) {
           var tx2 = (fx2 * 64) & 63, ty2 = (fy2 * 64) & 63;
-          buf[row + x2] = arr2[(ty2 << 6) + tx2];
+          var mx2 = fx2 - Math.floor(fx2 / 4) * 4, my2 = fy2 - Math.floor(fy2 / 4) * 4;
+          if (mx2 < 0.09 || my2 < 0.09) {
+            buf[row + x2] = seam;
+          } else {
+            buf[row + x2] = arr2[(ty2 << 6) + tx2];
+          }
           fx2 += stepX2; fy2 += stepY2;
         }
       } else {

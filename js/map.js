@@ -68,8 +68,9 @@ var MapData = (function () {
     var v = at(tx, ty);
     if (v === TEX.NONE) return 0;
     if (v === TEX.FENCE) return 1.25;
-    if (v === TEX.CRATE) return 1.7;
-    return 2.4;
+    if (v === TEX.CRATE) return 1.75;
+    if (v === TEX.DOOR) return 2.6;
+    return 3.15;
   }
   function solid(tx, ty) { return at(tx, ty) !== TEX.NONE; }
   function solidAt(wx, wy) { return solid(Math.floor(wx / G.TILE), Math.floor(wy / G.TILE)); }
