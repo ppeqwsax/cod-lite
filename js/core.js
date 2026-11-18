@@ -64,12 +64,12 @@ var WEAPONS = {
     head: 1.6, limb: 0.75
   },
   spr: {
-    id: 'spr', name: 'SPR-208', dmg: 112, rpm: 46, mag: 5, reserve: 30,
+    id: 'spr', name: 'SPR-208', dmg: 112, rpm: 62, mag: 5, reserve: 30,
     auto: false, spread: 0.028, moveSpread: 0.05, recoil: 3.2, reload: 3.4,
     range: 140, sound: 'spr',
     /* 平衡：开镜慢、开镜后极准、移速更慢、拉栓间隔长 */
-    adsTime: 0.46, adsFov: 26 * Math.PI / 180, adsSpread: 0.02, adsRecoil: 0.12,
-    adsSpeed: 0.5, bolt: 1.05,
+    adsTime: 0.30, adsFov: 38 * Math.PI / 180, adsSpread: 0.02, adsRecoil: 0.12,
+    adsSpeed: 0.5, bolt: 0.72,
     head: 2.0, limb: 0.62
   },
   pistol: {

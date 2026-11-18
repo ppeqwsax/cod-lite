@@ -156,7 +156,7 @@ var Sim = (function () {
       return false;
     }
     p.ammo[p.weapon]--;
-    p.fireCd = 60 / def.rpm;
+    p.fireCd = def.bolt || (60 / def.rpm);
     p.muzzle = 0.05;
 
     var adsSpread = def.adsSpread !== undefined ? def.adsSpread : G.ADS_SPREAD;

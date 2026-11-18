@@ -274,21 +274,22 @@
     ctx.lineWidth = 6;
     ctx.strokeStyle = 'rgba(20,22,26,0.9)';
     ctx.beginPath(); ctx.arc(cx, cy, r + 3, 0, Math.PI * 2); ctx.stroke();
-    /* 十字分划 + 密位点 */
-    ctx.strokeStyle = 'rgba(12,12,14,0.92)';
-    ctx.lineWidth = 1;
+    /* 黑色粗十字分划 + 下方密位点 */
+    ctx.strokeStyle = 'rgba(0,0,0,0.95)';
+    ctx.lineCap = 'butt';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.86, cy); ctx.lineTo(cx - 6, cy);
-    ctx.moveTo(cx + 6, cy); ctx.lineTo(cx + r * 0.86, cy);
-    ctx.moveTo(cx, cy - r * 0.86); ctx.lineTo(cx, cy - 6);
-    ctx.moveTo(cx, cy + 6); ctx.lineTo(cx, cy + r * 0.86);
+    ctx.moveTo(cx - r * 0.9, cy); ctx.lineTo(cx - 5, cy);
+    ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + r * 0.9, cy);
+    ctx.moveTo(cx, cy - r * 0.9); ctx.lineTo(cx, cy - 5);
+    ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + r * 0.9);
     ctx.stroke();
-    for (var d = 1; d <= 4; d++) {
-      var yy = cy + d * r * 0.14;
-      ctx.fillStyle = 'rgba(12,12,14,0.92)';
-      ctx.fillRect(cx - 1, yy, 2, 2);
-      ctx.fillRect(cx - d * r * 0.1, cy - 1, 2, 2);
-      ctx.fillRect(cx + d * r * 0.1, cy - 1, 2, 2);
+    /* 中心点 */
+    ctx.fillStyle = 'rgba(0,0,0,0.95)';
+    ctx.fillRect(cx - 1, cy - 1, 2, 2);
+    /* 下方 3 个密位点 */
+    for (var d = 1; d <= 3; d++) {
+      ctx.fillRect(cx - 1, cy + d * r * 0.15 - 1, 2, 2);
     }
     ctx.restore();
   }
