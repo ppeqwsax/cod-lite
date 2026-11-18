@@ -172,7 +172,7 @@
     /* 弹孔（贴在墙上，7 秒后消失） */
     for (i = 0; i < game.decals.length; i++) {
       var d = game.decals[i];
-      s = Render.project(d.x, d.y);
+      s = Render.project(d.x, d.y, d.z);
       if (!s) continue;
       var a = d.t > d.life - 1 ? (d.life - d.t) : 1;
       ctx.globalAlpha = 0.95 * a;
@@ -188,7 +188,7 @@
     /* 火花 */
     for (i = 0; i < game.effects.length; i++) {
       var e = game.effects[i];
-      s = Render.project(e.x, e.y);
+      s = Render.project(e.x, e.y, e.z);
       if (!s) continue;
       var k = 1 - e.t / e.life;
       ctx.globalAlpha = k * 0.95;
@@ -203,7 +203,7 @@
     /* 弹道线：从枪口（屏幕右下的枪管位置）拉到弹着点 */
     for (i = 0; i < game.tracers.length; i++) {
       var tr = game.tracers[i];
-      s = Render.project(tr.x1, tr.y1);
+      s = Render.project(tr.x1, tr.y1, tr.z1);
       if (!s) continue;
       var kk = 1 - tr.t / tr.life;
       ctx.globalAlpha = kk * 0.75;

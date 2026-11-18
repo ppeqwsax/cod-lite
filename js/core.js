@@ -5,15 +5,22 @@ var G = {
   TILE: 1.25,        // 一格 = 1.25 米
   MAP_W: 32,
   MAP_H: 32,
-  FOV: 66 * Math.PI / 180,
-  EYE: 0.5,          // 眼睛高度 = 墙高的一半（2.5D 相机）
+  FOV: 96 * Math.PI / 180,   // 水平视野
+  EYE: 1.55,         // 站立眼睛高度（米）
+  EYE_CROUCH: 1.05,  // 蹲下眼睛高度
+  EYE_SLIDE: 0.85,   // 滑铲眼睛高度
+  BODY_H: 1.78,      // 人物身高（米，给视野判定用）
   R: 0.24,           // 玩家碰撞半径（格）
-  WALK: 3.6,         // 格/秒（= 4.5 m/s）
-  SPRINT: 4.7,       // 格/秒（= 5.9 m/s）
+  WALK: 3.6,         // 米/秒
+  SPRINT: 5.6,       // 冲刺
+  SLIDE_SPEED: 8.2,  // 滑铲初速
+  SLIDE_TIME: 0.62,  // 滑铲时长
+  JUMP_V: 4.9,       // 起跳初速（米/秒）
+  GRAV: 15.5,        // 重力
   ACCEL: 16,
   FRICTION: 12,
   MOUSE: 0.0024,     // 每像素转角（弧度）
-  PITCH_MAX: 0.28,   // 伪俯仰上限
+  PITCH_MAX: 0.55,   // 伪俯仰上限（越大越能抬枪打高处）
   MAX_HP: 100,
   REGEN_DELAY: 5,
   REGEN_RATE: 20

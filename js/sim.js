@@ -1,6 +1,34 @@
 /* cod-lite · 权威模拟（单机与联机共用同一份 step） */
 var Sim = (function () {
 
+  /* 带高度的射线：pitch 让弹道上下走，能越过矮墙、打不中脚下的地面 */
+  function castRay3(x, y, z0, pitch, ang, maxDist) {
+    var dx = Math.cos(ang), dy = Math.sin(ang);
+    var step = 0.06;
+    var z, cx, cy;
+    for (var t = step; t <= maxDist; t += step) {
+      z = z0 + pitch * (t / G.TILE);
+      if (z <= 0) {
+        return { dist: t, x: x + dx * t, y: y + dy * t, z: 0, hit: true, kind: 'floor' };
+      }
+      if (z > 14) {
+        return { dist: t, x: x + dx * t, y: y + dy * t, z: z, hit: false };
+      }
+      cx = x + dx * t; cy = y + dy * t;
+      var mx = (cx / G.TILE) | 0, my = (cy / G.TILE) | 0;
+      if (mx < 0 || my < 0 || mx >= G.MAP_W || my >= G.MAP_H) {
+        return { dist: t, x: cx, y: cy, z: z, hit: false };
+      }
+      if (MapData.solid(mx, my)) {
+        /* 只有低于墙顶才算打中，否则子弹从墙顶飞过去 */
+        if (z <= MapData.h(mx, my) + 0.02) {
+          return { dist: t, x: cx, y: cy, z: z, hit: true, kind: 'wall', tile: MapData.at(mx, my) };
+        }
+      }
+    }
+    return { dist: maxDist, x: x + dx * maxDist, y: y + dy * maxDist, z: z0 + pitch * (maxDist / G.TILE), hit: false };
+  }
+
   /* 射线求交（格坐标）：返回最近的墙命中点 */
   function castRay(x, y, ang, maxDist) {
     var dx = Math.cos(ang), dy = Math.sin(ang);
@@ -44,12 +72,12 @@ var Sim = (function () {
     return g;
   }
 
-  function addTracer(g, x0, y0, x1, y1) {
-    g.tracers.push({ x0: x0, y0: y0, x1: x1, y1: y1, t: 0, life: 0.06 });
+  function addTracer(g, x0, y0, x1, y1, z1) {
+    g.tracers.push({ x0: x0, y0: y0, x1: x1, y1: y1, z1: z1 || 0, t: 0, life: 0.06 });
     if (g.tracers.length > 10) g.tracers.shift();
   }
 
-  function addHitMark(g, x, y) { addEffect(g, x, y, 'spark'); }
+  function addHitMark(g, x, y, z) { addEffect(g, x, y, z, 'spark'); }
 
   /* 射线是否打到玩家（bot 开火用） */
   function rayHitPlayer(x, y, ang, maxDist, p) {
@@ -87,8 +115,8 @@ var Sim = (function () {
     p.respawn(best);
   }
 
-  function addEffect(g, x, y, kind) {
-    g.effects.push({ x: x, y: y, t: 0, life: kind === 'spark' ? 0.16 : 0.5, kind: kind });
+  function addEffect(g, x, y, z, kind) {
+    g.effects.push({ x: x, y: y, z: z || 0, t: 0, life: kind === 'spark' ? 0.16 : 0.5, kind: kind });
     if (g.effects.length > 64) g.effects.shift();
   }
 
@@ -105,10 +133,11 @@ var Sim = (function () {
 
     var spread = def.spread + (p.moving > 0.35 ? def.moveSpread : 0);
     var ang = p.angle + (Math.random() - 0.5) * spread * 2;
-    var res = castRay(p.x, p.y, ang, def.range);
+    var eyeZ = p.eyeM || G.EYE;
+    var res = castRay3(p.x, p.y, eyeZ, p.pitch, ang, def.range);
     g.shots++;
 
-    /* 先看有没有打到 bot（比墙近才算） */
+    /* 先看有没有打到 bot（比弹着点近、且弹道高度落在他身上才算） */
     var hitBot = null, hitT = res.hit ? res.dist : def.range;
     for (var i = 0; i < g.bots.length; i++) {
       var b = g.bots[i];
@@ -117,6 +146,8 @@ var Sim = (function () {
       var t = vx * Math.cos(ang) + vy * Math.sin(ang);
       if (t <= 0 || t > hitT) continue;
       if (Math.abs(vx * Math.sin(ang) - vy * Math.cos(ang)) > 0.55) continue;
+      var zAtB = eyeZ + p.pitch * (t / G.TILE);
+      if (zAtB > (b.z || 0) + 1.75 || zAtB < (b.z || 0) - 0.1) continue;
       hitT = t; hitBot = b;
     }
 
@@ -124,8 +155,9 @@ var Sim = (function () {
       g.hits++;
       hitBot.hp -= def.dmg;
       hitBot.hurtAt = g.time;
-      addEffect(g, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT, 'spark');
-      addTracer(g, p.x, p.y, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT);
+      var bz = (hitBot.z || 0) + 1.15;
+      addEffect(g, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT, bz, 'spark');
+      addTracer(g, p.x, p.y, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT, bz);
       if (hitBot.hp <= 0) {
         hitBot.hp = 0;
         hitBot.alive = false;
@@ -135,12 +167,12 @@ var Sim = (function () {
       }
     } else if (res.hit) {
       g.hits++;
-      addEffect(g, res.x, res.y, 'spark');
-      g.decals.push({ x: res.x, y: res.y, t: 0, life: 7 });
+      addEffect(g, res.x, res.y, res.z, 'spark');
+      g.decals.push({ x: res.x, y: res.y, z: res.z, t: 0, life: 7 });
       if (g.decals.length > 36) g.decals.shift();
-      addTracer(g, p.x, p.y, res.x, res.y);
+      addTracer(g, p.x, p.y, res.x, res.y, res.z);
     } else {
-      addTracer(g, p.x, p.y, res.x, res.y);
+      addTracer(g, p.x, p.y, res.x, res.y, res.z);
     }
     // 后坐力
     p.recoil = Math.min(1.2, p.recoil + def.recoil * 0.35);
@@ -189,6 +221,30 @@ var Sim = (function () {
     p.angle = normAngle(p.angle + input.mouseDX * G.MOUSE);
     p.pitch = clamp(p.pitch - input.mouseDY * G.MOUSE * 0.75, -G.PITCH_MAX, G.PITCH_MAX);
 
+    /* ---------- 蹲 / 滑铲 / 跳跃 ---------- */
+    var speedNow = Math.hypot(p.vx, p.vy);
+    if (p.slideT <= 0 && input.crouch && !p.crouchHeld && p.onGround && speedNow > G.WALK * 0.8) {
+      p.slideT = G.SLIDE_TIME;
+      var sl = Math.max(1e-3, speedNow);
+      p.vx = p.vx / sl * G.SLIDE_SPEED;
+      p.vy = p.vy / sl * G.SLIDE_SPEED;
+    }
+    p.crouchHeld = !!input.crouch;
+    p.crouch = !!input.crouch && p.slideT <= 0;
+
+    if (input.jump && p.onGround) {
+      p.vz = G.JUMP_V;
+      p.onGround = false;
+      p.slideT = 0;
+    }
+    if (!p.onGround) {
+      p.vz -= G.GRAV * dt;
+      p.z += p.vz * dt;
+      if (p.z <= 0) { p.z = 0; p.vz = 0; p.onGround = true; }
+    }
+    if (p.slideT > 0) p.slideT -= dt;
+    p.eyeM = p.z + (p.slideT > 0 ? G.EYE_SLIDE : (p.crouch ? G.EYE_CROUCH : G.EYE));
+
     /* 移动 */
     var fwd = (input.keyW ? 1 : 0) - (input.keyS ? 1 : 0);
     var strafe = (input.keyD ? 1 : 0) - (input.keyA ? 1 : 0);
@@ -196,18 +252,26 @@ var Sim = (function () {
     if (len > 1) { fwd /= len; strafe /= len; }
     var speed = (input.shift ? G.SPRINT : G.WALK);
     if (p.reloadT > 0) speed *= 0.85;
+    if (p.crouch) speed *= 0.55;
 
     var dirX = Math.cos(p.angle), dirY = Math.sin(p.angle);
     var wishX = dirX * fwd - dirY * strafe;
     var wishY = dirY * fwd + dirX * strafe;
-    var tvx = wishX * speed, tvy = wishY * speed;
 
-    var k = clamp(G.ACCEL * dt, 0, 1);
-    p.vx += (tvx - p.vx) * k;
-    p.vy += (tvy - p.vy) * k;
-    if (!fwd && !strafe) {
-      var f = clamp(G.FRICTION * dt, 0, 1);
-      p.vx -= p.vx * f; p.vy -= p.vy * f;
+    if (p.slideT > 0) {
+      /* 滑铲：保持动量，只做轻微摩擦，转向几乎无效 */
+      var sf = clamp(1.15 * dt, 0, 1);
+      p.vx -= p.vx * sf * 0.45;
+      p.vy -= p.vy * sf * 0.45;
+    } else {
+      var tvx = wishX * speed, tvy = wishY * speed;
+      var k = clamp(G.ACCEL * dt, 0, 1) * (p.onGround ? 1 : 0.35);
+      p.vx += (tvx - p.vx) * k;
+      p.vy += (tvy - p.vy) * k;
+      if (!fwd && !strafe) {
+        var f = clamp(G.FRICTION * dt, 0, 1);
+        p.vx -= p.vx * f; p.vy -= p.vy * f;
+      }
     }
 
     var nx = p.x + p.vx * dt;
@@ -257,6 +321,7 @@ var Sim = (function () {
     newGame: newGame,
     step: step,
     castRay: castRay,
+    castRay3: castRay3,
     startReload: startReload,
     tryFire: tryFire,
     addTracer: addTracer,

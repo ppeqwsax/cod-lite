@@ -6,6 +6,13 @@ function Player(spawn) {
   this.pitch = 0;
   this.vx = 0;
   this.vy = 0;
+  this.z = 0;          // 脚底离地高度（米）
+  this.vz = 0;
+  this.onGround = true;
+  this.slideT = 0;     // 滑铲剩余时间
+  this.crouch = false;
+  this.crouchHeld = false;
+  this.eyeM = G.EYE;   // 当前眼睛高度（米，模拟里每帧算）
 
   this.hp = G.MAX_HP;
   this.alive = true;
@@ -31,6 +38,8 @@ Player.prototype.def = function () { return WEAPONS[this.weapon]; };
 Player.prototype.respawn = function (spawn) {
   this.x = spawn.x; this.y = spawn.y; this.angle = spawn.a;
   this.pitch = 0; this.vx = 0; this.vy = 0;
+  this.z = 0; this.vz = 0; this.onGround = true;
+  this.slideT = 0; this.crouch = false; this.eyeM = G.EYE;
   this.hp = G.MAX_HP; this.alive = true;
   this.ammo.rifle = WEAPONS.rifle.mag;
   this.ammo.pistol = WEAPONS.pistol.mag;

@@ -3,7 +3,7 @@ var Input = (function () {
   var keys = {};
   var state = {
     keyW: false, keyA: false, keyS: false, keyD: false,
-    shift: false, fire: false, reload: false,
+    shift: false, fire: false, reload: false, jump: false, crouch: false,
     mouseDX: 0, mouseDY: 0,
     locked: false
   };
@@ -18,6 +18,8 @@ var Input = (function () {
     else if (c === 'KeyD') state.keyD = true;
     else if (c === 'ShiftLeft' || c === 'ShiftRight') state.shift = true;
     else if (c === 'KeyR') state.reload = true;
+    else if (c === 'Space') { state.jump = true; e.preventDefault(); }
+    else if (c === 'ControlLeft' || c === 'ControlRight' || c === 'KeyC') { state.crouch = true; e.preventDefault(); }
     else if (c === 'Digit1') state.pick = 0;
     else if (c === 'Digit2') state.pick = 1;
     else if (c === 'Space') e.preventDefault();
@@ -30,6 +32,8 @@ var Input = (function () {
     else if (c === 'KeyS') state.keyS = false;
     else if (c === 'KeyD') state.keyD = false;
     else if (c === 'ShiftLeft' || c === 'ShiftRight') state.shift = false;
+    else if (c === 'Space') state.jump = false;
+    else if (c === 'ControlLeft' || c === 'ControlRight' || c === 'KeyC') state.crouch = false;
   }
 
   function bind(canvas, lockCb) {
@@ -88,6 +92,7 @@ var Input = (function () {
     var out = {
       keyW: state.keyW, keyA: state.keyA, keyS: state.keyS, keyD: state.keyD,
       shift: state.shift, fire: state.fire, reload: state.reload,
+      jump: state.jump, crouch: state.crouch,
       mouseDX: state.mouseDX, mouseDY: state.mouseDY,
       lock: state.locked, pick: state.pick
     };
