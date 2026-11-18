@@ -26,20 +26,29 @@
       <span id="fps">-- FPS</span>
       <span id="status">菜单</span>
     </div>
+    <div class="hud-tc">
+      <div class="timer" id="timer">5:00</div>
+      <div class="score"><b id="scoreP">0</b><i>:</i><b id="scoreB">0</b></div>
+    </div>
     <div class="hint" id="hint">换弹中…</div>
   </div>
 
   <div class="overlay" id="menu">
     <div class="panel">
       <h1>货场 <span>1v1</span></h1>
-      <p class="sub">SHIPMENT · 像素风 · M0 场景构建</p>
+      <p class="sub">SHIPMENT · 像素风 · M1 单机 bot</p>
+      <div class="diff">
+        <button class="chip" data-diff="easy">简单</button>
+        <button class="chip on" data-diff="normal">普通</button>
+        <button class="chip" data-diff="hard">困难</button>
+      </div>
       <button class="btn primary" id="startBtn">进入训练场</button>
       <div class="keys">
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动</div>
         <div><kbd>Shift</kbd> 冲刺 · <kbd>鼠标</kbd> 转向 · <kbd>左键</kbd> 射击</div>
         <div><kbd>R</kbd> 换弹 · <kbd>1</kbd>/<kbd>2</kbd> 切枪 · <kbd>Esc</kbd> 暂停</div>
       </div>
-      <p class="note">M0 阶段：地图 / 移动 / 射击打墙已就绪，敌人与联机在 M1–M2 加入。</p>
+      <p class="note">M1 阶段：单人对抗 BOT，先到 25 杀或 5 分钟结束；联机在 M2 加入。</p>
     </div>
   </div>
 
@@ -50,6 +59,21 @@
       <p class="note">按 Esc 退出指针锁定后会自动暂停</p>
     </div>
   </div>
+
+  <div class="overlay dead hidden" id="dead">
+    <div class="deadbox">
+      <h2>你被击倒</h2>
+      <p id="deadTip">3 秒后重生</p>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="result">
+    <div class="panel">
+      <h1 id="resultTitle">胜利</h1>
+      <p class="sub" id="resultSub"></p>
+      <button class="btn primary" id="againBtn">再来一局</button>
+    </div>
+  </div>
 </div>
 
 <script src="js/core.js"></script>
@@ -57,6 +81,7 @@
 <script src="js/raycast.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/sim.js"></script>
+<script src="js/bot.js"></script>
 <script src="js/input.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/main.js"></script>

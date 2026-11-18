@@ -140,3 +140,28 @@ kbd {
   .hud-br { right: 14px; bottom: 10px; }
   .ammo b { font-size: 28px; }
 }
+
+/* ---------- 比分 / 计时 ---------- */
+.hud-tc {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  text-align: center; pointer-events: none;
+}
+.hud-tc .timer { font-size: 18px; font-weight: 700; color: #ffd27a; letter-spacing: 1px; text-shadow: 0 1px 2px #000; }
+.hud-tc .score { font-size: 13px; color: #e8edf4; text-shadow: 0 1px 2px #000; }
+.hud-tc .score b { color: #7fd1ff; }
+.hud-tc .score i { opacity: 0.6; margin: 0 5px; font-style: normal; }
+
+/* ---------- 死亡提示 ---------- */
+.overlay.dead { background: rgba(120, 20, 20, 0.22); backdrop-filter: none; }
+.deadbox { text-align: center; color: #ffe3df; text-shadow: 0 2px 6px #000; }
+.deadbox h2 { font-size: 26px; letter-spacing: 6px; margin-bottom: 6px; }
+.deadbox p { font-size: 12px; opacity: 0.85; }
+
+/* ---------- 难度选择 ---------- */
+.diff { display: flex; gap: 6px; justify-content: center; margin: 2px 0 10px; }
+.chip {
+  font: inherit; font-size: 12px; padding: 5px 14px; cursor: pointer;
+  color: #cfd6e0; background: #161b22; border: 1px solid #2b3340; border-radius: 999px;
+}
+.chip:hover { border-color: #4d5b70; }
+.chip.on { color: #0b0f14; background: #ffd27a; border-color: #ffd27a; font-weight: 700; }

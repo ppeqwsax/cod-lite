@@ -31,15 +31,60 @@ var Sim = (function () {
   function newGame() {
     var g = {
       players: [],
+      bots: [],
       effects: [],
       decals: [],       // 墙上的弹孔
       tracers: [],      // 弹道线
       time: 0,
       shots: 0,
-      hits: 0
+      hits: 0,
+      match: { target: 25, limit: 300, left: 300, over: false, player: 0, bot: 0 }
     };
     g.players.push(new Player(MapData.spawns[0]));
     return g;
+  }
+
+  function addTracer(g, x0, y0, x1, y1) {
+    g.tracers.push({ x0: x0, y0: y0, x1: x1, y1: y1, t: 0, life: 0.06 });
+    if (g.tracers.length > 10) g.tracers.shift();
+  }
+
+  function addHitMark(g, x, y) { addEffect(g, x, y, 'spark'); }
+
+  /* 射线是否打到玩家（bot 开火用） */
+  function rayHitPlayer(x, y, ang, maxDist, p) {
+    var dx = Math.cos(ang), dy = Math.sin(ang);
+    var vx = p.x - x, vy = p.y - y;
+    var t = vx * dx + vy * dy;
+    if (t < 0 || t > maxDist) return false;
+    return Math.abs(vx * dy - vy * dx) < 0.55;
+  }
+
+  function hitPlayer(g, p, dmg, by) {
+    if (!p.alive) return;
+    p.hp -= dmg;
+    p.hurtAt = g.time;
+    if (p.hp <= 0) {
+      p.hp = 0;
+      p.alive = false;
+      p.respawnT = 3;
+      g.match.bot++;
+      if (by) by.kills++;
+    }
+  }
+
+  function respawnPlayer(g, p) {
+    var best = MapData.spawns[0], bestScore = -1;
+    for (var i = 0; i < MapData.spawns.length; i++) {
+      var s = MapData.spawns[i], dmin = 1e9;
+      for (var j = 0; j < g.bots.length; j++) {
+        var b = g.bots[j];
+        if (!b.alive) continue;
+        dmin = Math.min(dmin, dist(s.x, s.y, b.x, b.y));
+      }
+      if (dmin > bestScore) { bestScore = dmin; best = s; }
+    }
+    p.respawn(best);
   }
 
   function addEffect(g, x, y, kind) {
@@ -62,15 +107,41 @@ var Sim = (function () {
     var ang = p.angle + (Math.random() - 0.5) * spread * 2;
     var res = castRay(p.x, p.y, ang, def.range);
     g.shots++;
-    if (res.hit) {
+
+    /* 先看有没有打到 bot（比墙近才算） */
+    var hitBot = null, hitT = res.hit ? res.dist : def.range;
+    for (var i = 0; i < g.bots.length; i++) {
+      var b = g.bots[i];
+      if (!b.alive) continue;
+      var vx = b.x - p.x, vy = b.y - p.y;
+      var t = vx * Math.cos(ang) + vy * Math.sin(ang);
+      if (t <= 0 || t > hitT) continue;
+      if (Math.abs(vx * Math.sin(ang) - vy * Math.cos(ang)) > 0.55) continue;
+      hitT = t; hitBot = b;
+    }
+
+    if (hitBot) {
+      g.hits++;
+      hitBot.hp -= def.dmg;
+      hitBot.hurtAt = g.time;
+      addEffect(g, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT, 'spark');
+      addTracer(g, p.x, p.y, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT);
+      if (hitBot.hp <= 0) {
+        hitBot.hp = 0;
+        hitBot.alive = false;
+        hitBot.respawnT = 3;
+        g.match.player++;
+        p.kills = (p.kills || 0) + 1;
+      }
+    } else if (res.hit) {
       g.hits++;
       addEffect(g, res.x, res.y, 'spark');
       g.decals.push({ x: res.x, y: res.y, t: 0, life: 7 });
       if (g.decals.length > 36) g.decals.shift();
+      addTracer(g, p.x, p.y, res.x, res.y);
+    } else {
+      addTracer(g, p.x, p.y, res.x, res.y);
     }
-    /* 弹道线：枪口 → 命中点，60ms 内淡出 */
-    g.tracers.push({ x0: p.x, y0: p.y, x1: res.x, y1: res.y, t: 0, life: 0.06 });
-    if (g.tracers.length > 8) g.tracers.shift();
     // 后坐力
     p.recoil = Math.min(1.2, p.recoil + def.recoil * 0.35);
     p.pitch = clamp(p.pitch + def.recoil * 0.012, -G.PITCH_MAX, G.PITCH_MAX);
@@ -96,6 +167,23 @@ var Sim = (function () {
 
   function step(g, p, dt, input) {
     g.time += dt;
+
+    /* 比赛计时 + 结束判定 */
+    var m = g.match;
+    if (!m.over) {
+      m.left -= dt;
+      if (m.player >= m.target || m.bot >= m.target || m.left <= 0) {
+        m.over = true;
+        m.left = Math.max(0, m.left);
+      }
+    }
+
+    /* 玩家死亡 → 复活倒计时 */
+    if (!p.alive) {
+      p.respawnT -= dt;
+      if (p.respawnT <= 0) respawnPlayer(g, p);
+      return;
+    }
 
     /* 视角 */
     p.angle = normAngle(p.angle + input.mouseDX * G.MOUSE);
@@ -170,6 +258,11 @@ var Sim = (function () {
     step: step,
     castRay: castRay,
     startReload: startReload,
-    tryFire: tryFire
+    tryFire: tryFire,
+    addTracer: addTracer,
+    addHitMark: addHitMark,
+    rayHitPlayer: rayHitPlayer,
+    hitPlayer: hitPlayer,
+    respawnPlayer: respawnPlayer
   };
 })();

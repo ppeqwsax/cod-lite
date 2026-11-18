@@ -27,6 +27,8 @@ function normAngle(a) {
   return a;
 }
 function dist2(ax, ay, bx, by) { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; }
+function dist(ax, ay, bx, by) { return Math.sqrt(dist2(ax, ay, bx, by)); }
+function angleDiff(a, b) { return normAngle(a - b); }
 function fmtTime(s) {
   s = Math.max(0, Math.ceil(s));
   const m = Math.floor(s / 60), r = s % 60;

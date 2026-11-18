@@ -23,6 +23,7 @@ function Player(spawn) {
   this.moving = 0;       // 0..1 移动强度
   this.kills = 0;
   this.deaths = 0;
+  this.respawnT = 0;
 }
 
 Player.prototype.def = function () { return WEAPONS[this.weapon]; };
