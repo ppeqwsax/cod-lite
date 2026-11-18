@@ -484,7 +484,7 @@
         var a = 1 - life / 1.6;
         ctx.save();
         ctx.globalAlpha = a;
-        ctx.font = 'bold 11px "Segoe UI", system-ui';
+        ctx.font = 'bold 13px "Segoe UI", system-ui';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -531,8 +531,8 @@
 
     /* 击杀瞬间四周泛红 */
     if (dt >= 0 && dt < 0.3) {
-      var a2 = 0.32 * (1 - dt / 0.3);
-      var grd = ctx.createRadialGradient(G.W / 2, G.H / 2, G.H * 0.32, G.W / 2, G.H / 2, G.H * 0.82);
+      var a2 = 0.22 * (1 - dt / 0.3);
+      var grd = ctx.createRadialGradient(G.W / 2, G.H / 2, G.H * 0.42, G.W / 2, G.H / 2, G.H * 0.86);
       grd.addColorStop(0, 'rgba(255,60,40,0)');
       grd.addColorStop(1, 'rgba(255,50,30,' + a2.toFixed(3) + ')');
       ctx.fillStyle = grd;
