@@ -204,7 +204,7 @@ var Sim = (function () {
         hitBot.hp = 0;
         hitBot.alive = false;
         hitBot.respawnT = 3;
-        addScore(g, 0);
+        addScore(g, p.side || 0);
         p.kills = (p.kills || 0) + 1;
 
         /* ---- 击杀反馈数据 ---- */

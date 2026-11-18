@@ -86,7 +86,7 @@ var Bot = (function () {
       path: null, pathI: 0, repathT: 0,
       see: false, seeT: 0, aimErr: 0, aimErrT: 0,
       strafe: 0, strafeT: 0,
-      respawnT: 0, kills: 0, deaths: 0,
+      respawnT: 0, kills: 0, deaths: 0, side: 1,
       lastSeen: null, walk: 0
     };
   }
