@@ -780,6 +780,7 @@
      ============================================================ */
   var net = null, online = false, mySide = 0, remoteIn = {}, overSent = false, inCount = 0;
   var snapAcc = 0, inAcc = 0, pingAcc = 0;
+  var remoteHist = [];
 
   function netSet(txt) {
     var el = document.getElementById('netStatus');
@@ -832,7 +833,7 @@
       var s = d.ps[i], pl = game.players[i];
       if (!s || !pl) continue;
       if (i === mySide) {
-        /* 自己：轻微校正，误差过大才硬同步 */
+        /* 自己：本地预测说了算，只有死亡/复活/误差过大才硬同步 */
         pl.hp = s.hp;
         pl.alive = !!s.al;
         /* 弹药以房主为准，但只往下修（本地刚打完的枪不要被弹回来） */
@@ -843,24 +844,51 @@
           if (s.rs[1] > pl.reserve.pistol) pl.reserve.pistol = s.rs[1];
         }
         var err = Math.hypot(s.x - pl.x, s.y - pl.y);
-        if (!s.al || err > 1.8) {
+        var respawned = !pl.alive || err > 1.2;
+        if (!s.al || respawned) {
           pl.x = s.x; pl.y = s.y; pl.z = s.z; pl.vx = 0; pl.vy = 0;
-        } else {
-          pl.x += (s.x - pl.x) * 0.22;
-          pl.y += (s.y - pl.y) * 0.22;
-          pl.z += (s.z - pl.z) * 0.35;
         }
       } else {
-        /* 对手：直接采用权威状态 */
-        pl.x = s.x; pl.y = s.y; pl.z = s.z;
-        pl.angle = s.a; pl.pitch = s.p;
+        /* 对手：存进历史缓冲，渲染时按 90ms 延迟插值，避免 20Hz 跳点 */
+        var now = performance.now() / 1000;
+        remoteHist.push({
+          t: now, x: s.x, y: s.y, z: s.z, a: s.a, p: s.p,
+          ads: s.ads, wp: s.wp
+        });
+        if (remoteHist.length > 16) remoteHist.shift();
         pl.hp = s.hp; pl.alive = !!s.al;
-        pl.ads = s.ads;
         pl.weapon = s.wp ? 'pistol' : 'rifle';
-        pl.muzzle = s.mz ? 0.05 : Math.max(0, (pl.muzzle || 0));
-        pl.walk = (pl.walk || 0) + 0.4;
+        if (s.mz) pl.muzzle = 0.05;
       }
     }
+  }
+
+  /* 客机：把对手的 20Hz 快照插值成 60fps 平滑位置 */
+  function smoothRemote() {
+    if (!remoteHist.length) return;
+    var pl = game.players[1 - mySide];
+    if (!pl) return;
+    var now = performance.now() / 1000;
+    var target = now - 0.09;
+    var n = remoteHist.length;
+    var a = remoteHist[0], b = remoteHist[n - 1];
+    for (var i = 0; i < n - 1; i++) {
+      if (remoteHist[i].t <= target && remoteHist[i + 1].t >= target) {
+        a = remoteHist[i]; b = remoteHist[i + 1];
+        break;
+      }
+    }
+    var k = (b.t > a.t) ? clamp((target - a.t) / (b.t - a.t), 0, 1) : 1;
+    var px = pl.x, py = pl.y;
+    pl.x = a.x + (b.x - a.x) * k;
+    pl.y = a.y + (b.y - a.y) * k;
+    pl.z = a.z + (b.z - a.z) * k;
+    pl.angle = a.a + normAngle(b.a - a.a) * k;
+    pl.pitch = a.p + (b.p - a.p) * k;
+    pl.ads = a.ads + (b.ads - a.ads) * k;
+    var moved = Math.hypot(pl.x - px, pl.y - py);
+    pl.walk = (pl.walk || 0) + moved * 3;
+    pl.moving = moved > 0.004;
   }
 
   function startOnlineBattle(role) {
@@ -943,6 +971,7 @@
 
   function endOnline() {
     online = false;
+    remoteHist.length = 0;
     if (net) { net.close(); net = null; }
     state = 'menu';
     show(menuEl, true);
@@ -968,6 +997,7 @@
       /* 自己先本地跑一遍，手感立刻有反馈 */
       Sim.stepPlayer(game, player, dt, inp);
       Sim.ageEffects(game, dt);
+      smoothRemote();
       inAcc += dt;
       if (inAcc >= 1 / 30) { inAcc = 0; net._send({ t: 'in', d: packInput(inp) }); }
     }
