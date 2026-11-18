@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>货场 1v1 · COD-Lite</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎯</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <canvas id="screen" width="480" height="270"></canvas>
+
+  <div class="hud">
+    <div class="hud-tl">
+      <div class="hp">
+        <div class="hp-bar"><i id="hpFill"></i></div>
+        <span id="hpNum">100</span>
+      </div>
+    </div>
+    <div class="hud-br">
+      <div class="wpn" id="wpnName">M4A1</div>
+      <div class="ammo"><b id="ammo">30</b><span id="ammoMax">/ 150</span></div>
+    </div>
+    <div class="hud-tr">
+      <span id="fps">-- FPS</span>
+      <span id="status">菜单</span>
+    </div>
+    <div class="hint" id="hint">换弹中…</div>
+  </div>
+
+  <div class="overlay" id="menu">
+    <div class="panel">
+      <h1>货场 <span>1v1</span></h1>
+      <p class="sub">SHIPMENT · 像素风 · M0 场景构建</p>
+      <button class="btn primary" id="startBtn">进入训练场</button>
+      <div class="keys">
+        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动</div>
+        <div><kbd>Shift</kbd> 冲刺 · <kbd>鼠标</kbd> 转向 · <kbd>左键</kbd> 射击</div>
+        <div><kbd>R</kbd> 换弹 · <kbd>1</kbd>/<kbd>2</kbd> 切枪 · <kbd>Esc</kbd> 暂停</div>
+      </div>
+      <p class="note">M0 阶段：地图 / 移动 / 射击打墙已就绪，敌人与联机在 M1–M2 加入。</p>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="pause">
+    <div class="panel small">
+      <h2>已暂停</h2>
+      <button class="btn primary" id="resumeBtn">继续游戏</button>
+      <p class="note">按 Esc 退出指针锁定后会自动暂停</p>
+    </div>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/map.js"></script>
+<script src="js/raycast.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/input.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
