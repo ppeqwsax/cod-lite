@@ -140,7 +140,8 @@ var Sim = (function () {
     var rel = (zHit === null || zHit === undefined ? 1.15 : zHit) - (o.z || 0);
     var mul = 1;
     if (rel > 1.55) mul = def.head || 1.5;
-    else if (rel < 0.85) mul = def.limb || 0.8;
+    /* 只有膝盖以下才算"腿"：腹/腰都按躯干算，保证 SPR 的 112 能一枪带走 */
+    else if (rel < 0.68) mul = def.limb || 0.8;
     return Math.round(def.dmg * mul);
   }
 
