@@ -59,7 +59,9 @@
       get net() { return net; },
       get remoteIn() { return remoteIn; },
       get inCount() { return inCount; },
-      start: startGame
+      start: startGame,
+      Bot: Bot,
+      Sim: Sim
     };
   }
 

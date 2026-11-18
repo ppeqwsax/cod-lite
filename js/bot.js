@@ -211,27 +211,58 @@ var Bot = (function () {
   }
 
   /* 选一个离玩家远、且不和别的 bot 挤在一起的出生点 */
+  var freeCells = null;
+  function freeCellList() {
+    if (freeCells) return freeCells;
+    freeCells = [];
+    for (var ty = 1; ty < G.MAP_H - 1; ty++) {
+      for (var tx = 1; tx < G.MAP_W - 1; tx++) {
+        var wx = (tx + 0.5) * G.TILE, wy = (ty + 0.5) * G.TILE;
+        if (MapData.blocked(wx, wy, G.R + 0.12)) continue;
+        if (MapData.blocked(wx, wy, 0.55)) continue;   /* 太贴墙的格子也不要 */
+        freeCells.push({ x: wx, y: wy });
+      }
+    }
+    return freeCells;
+  }
+
   function respawn(b, g, p) {
+    var cells = freeCellList();
     var best = null, bestScore = -1e9;
-    for (var i = 0; i < MapData.spawns.length; i++) {
-      var s = MapData.spawns[i];
-      var dPlayer = dist(s.x, s.y, p.x, p.y);
+    for (var k = 0; k < 64; k++) {
+      var c = cells[(Math.random() * cells.length) | 0];
+      var d = dist(c.x, c.y, p.x, p.y);
+      if (d < 14 || d > 36) continue;
+      /* 玩家看得见的位置不要刷 */
+      var ang = Math.atan2(p.y - c.y, p.x - c.x);
+      var ray = Sim.castRay(c.x, c.y, ang, Math.max(0.5, d - 0.4));
+      var visible = !ray.hit || ray.dist >= d - 0.6;
       var dMate = 1e9;
       for (var j = 0; j < g.bots.length; j++) {
         var o = g.bots[j];
         if (o === b || !o.alive) continue;
-        dMate = Math.min(dMate, dist(s.x, s.y, o.x, o.y));
+        dMate = Math.min(dMate, dist(c.x, c.y, o.x, o.y));
       }
-      /* 离玩家 8~20 米最合适：太近不公平，太远半天遇不上 */
-      var score = -Math.abs(dPlayer - 13) + Math.min(dMate, 12) * 0.7 + Math.random() * 2;
-      if (score > bestScore) { bestScore = score; best = s; }
+      var score = -Math.abs(d - 22) + (visible ? -16 : 0) + Math.min(dMate, 10) * 0.5 + Math.random() * 1.5;
+      if (score > bestScore) { bestScore = score; best = c; }
     }
-    if (!best) best = MapData.spawns[0];
-    b.x = best.x; b.y = best.y; b.angle = best.a;
+    if (!best) {
+      /* 实在找不到（比如玩家蹲在角落）就退回最远的固定出生点 */
+      var far = null, farD = -1;
+      for (var i = 0; i < MapData.spawns.length; i++) {
+        var s = MapData.spawns[i];
+        var ds = dist(s.x, s.y, p.x, p.y);
+        if (ds > farD) { farD = ds; far = s; }
+      }
+      best = far || MapData.spawns[0];
+    }
+    b.x = best.x; b.y = best.y;
+    b.angle = best.a !== undefined ? best.a : Math.atan2(p.y - b.y, p.x - b.x);
     b.hp = G.MAX_HP; b.alive = true; b.path = null;
     b.fireCd = 0; b.reloadT = 0; b.muzzle = 0;
     b.lastSeen = null; b.seenAt = -99; b.burstLeft = 0;
     b.spawnAt = g.time;
+    b.seeT = 0;
   }
 
   function weaponDefOf(b) { return WEAPONS[b.weapon] || WEAPONS.rifle; }

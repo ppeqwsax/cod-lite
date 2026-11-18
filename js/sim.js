@@ -203,7 +203,7 @@ var Sim = (function () {
       if (hitBot.hp <= 0) {
         hitBot.hp = 0;
         hitBot.alive = false;
-        hitBot.respawnT = 3;
+        hitBot.respawnT = 4.5;
         addScore(g, p.side || 0);
         p.kills = (p.kills || 0) + 1;
 
