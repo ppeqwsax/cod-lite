@@ -60,6 +60,11 @@ var Sfx = (function () {
       if (weapon === 'pistol') {
         burst(0.14, 0.55, 'bandpass', 1600, 400);
         tone('square', 220, 70, 0.09, 0.18);
+      } else if (weapon === 'spr') {
+        /* 栓动：一声很沉、很长的爆响 + 尾音 */
+        burst(0.28, 0.95, 'lowpass', 900, 180);
+        tone('sawtooth', 90, 34, 0.34, 0.34);
+        tone('square', 55, 26, 0.18, 0.16);
       } else {
         burst(0.16, 0.6, 'bandpass', 1200, 300);
         tone('sawtooth', 160, 60, 0.1, 0.22);

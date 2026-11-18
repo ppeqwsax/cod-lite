@@ -85,6 +85,7 @@ html, body {
   backdrop-filter: blur(3px);
 }
 .overlay.hidden { display: none; }
+.hidden { display: none !important; }
 
 .panel {
   width: min(560px, 88vw);

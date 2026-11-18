@@ -53,17 +53,30 @@ function fmtTime(s) {
   return m + ':' + (r < 10 ? '0' : '') + r;
 }
 
-/* 武器数值 */
+/* 武器数值
+   dmg 是「躯干命中」的基础伤害；head / limb 是头 / 腿的倍率
+   adsTime / adsFov / adsSpread / adsRecoil / adsSpeed 是该枪自己的开镜参数（缺省用 G 的全局值） */
 var WEAPONS = {
   rifle: {
     id: 'rifle', name: 'M4A1', dmg: 26, rpm: 690, mag: 30, reserve: 150,
     auto: true, spread: 0.012, moveSpread: 0.02, recoil: 1.0, reload: 2.1,
-    range: 70, sound: 'rifle'
+    range: 70, sound: 'rifle',
+    head: 1.6, limb: 0.75
+  },
+  spr: {
+    id: 'spr', name: 'SPR-208', dmg: 112, rpm: 46, mag: 5, reserve: 30,
+    auto: false, spread: 0.028, moveSpread: 0.05, recoil: 3.2, reload: 3.4,
+    range: 140, sound: 'spr',
+    /* 平衡：开镜慢、开镜后极准、移速更慢、拉栓间隔长 */
+    adsTime: 0.46, adsFov: 26 * Math.PI / 180, adsSpread: 0.02, adsRecoil: 0.12,
+    adsSpeed: 0.5, bolt: 1.05,
+    head: 2.0, limb: 0.62
   },
   pistol: {
     id: 'pistol', name: 'M9', dmg: 34, rpm: 430, mag: 12, reserve: 72,
     auto: false, spread: 0.008, moveSpread: 0.014, recoil: 1.5, reload: 1.6,
-    range: 50, sound: 'pistol'
+    range: 50, sound: 'pistol',
+    head: 1.6, limb: 0.8
   }
 };
 

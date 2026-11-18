@@ -135,8 +135,16 @@ var Sim = (function () {
     p.respawn(best);
   }
 
-  function addEffect(g, x, y, z, kind) {
-    g.effects.push({ x: x, y: y, z: z || 0, t: 0, life: kind === 'spark' ? 0.16 : 0.5, kind: kind });
+  /* 命中部位倍率：头 1.55m 以上算头，0.85m 以下算腿 */
+  function zoneDmg(def, zHit, o) {
+    var rel = (zHit === null || zHit === undefined ? 1.15 : zHit) - (o.z || 0);
+    var mul = 1;
+    if (rel > 1.55) mul = def.head || 1.5;
+    else if (rel < 0.85) mul = def.limb || 0.8;
+    return Math.round(def.dmg * mul);
+  }
+
+  function addEffect(g, x, y, z, kind) {    g.effects.push({ x: x, y: y, z: z || 0, t: 0, life: kind === 'spark' ? 0.16 : 0.5, kind: kind });
     if (g.effects.length > 64) g.effects.shift();
   }
 
@@ -151,14 +159,15 @@ var Sim = (function () {
     p.fireCd = 60 / def.rpm;
     p.muzzle = 0.05;
 
-    var spread = (def.spread + (p.moving > 0.35 ? def.moveSpread : 0)) * (1 - (1 - G.ADS_SPREAD) * p.ads);
+    var adsSpread = def.adsSpread !== undefined ? def.adsSpread : G.ADS_SPREAD;
+    var spread = (def.spread + (p.moving > 0.35 ? def.moveSpread : 0)) * (1 - (1 - adsSpread) * p.ads);
     var ang = p.angle + (Math.random() - 0.5) * spread * 2;
     var eyeZ = p.eyeM || G.EYE;
     var res = castRay3(p.x, p.y, eyeZ, p.pitch, ang, def.range);
     g.shots++;
 
     /* 先看有没有打到人（bot 或另一名玩家）：比弹着点近、且弹道高度落在身上才算 */
-    var hitBot = null, hitPl = null, hitT = res.hit ? res.dist : def.range;
+    var hitBot = null, hitPl = null, hitH = null, hitT = res.hit ? res.dist : def.range;
     function lateral(o, ox, oy) {
       var vx = ox - p.x, vy = oy - p.y;
       var t = vx * Math.cos(ang) + vy * Math.sin(ang);
@@ -182,6 +191,7 @@ var Sim = (function () {
       if (lat < 0 || lat > 0.55) return;
       var vx = o.x - p.x, vy = o.y - p.y;
       hitT = vx * Math.cos(ang) + vy * Math.sin(ang);
+      hitH = eyeZ + p.pitch * (hitT / G.TILE);
       if (o.def) { hitPl = o; hitBot = null; } else { hitBot = o; hitPl = null; }
     }
     for (var i = 0; i < g.bots.length; i++) testTarget(g.bots[i]);
@@ -197,7 +207,7 @@ var Sim = (function () {
       addEffect(g, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT, pz, 'spark');
       addTracer(g, p.x, p.y, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT, pz);
       var wasAlive = hitPl.alive;
-      hitPlayer(g, hitPl, def.dmg, p);
+      hitPlayer(g, hitPl, zoneDmg(def, hitH, hitPl), p);
       g.lastHit = { t: g.time, kill: wasAlive && !hitPl.alive };
       if (wasAlive && !hitPl.alive) {
         g.lastKill = { t: g.time, headshot: false, streak: 1, x: hitPl.x, y: hitPl.y, z: hitPl.z || 0 };
@@ -209,7 +219,8 @@ var Sim = (function () {
       g.hits++;
       g.botHits = (g.botHits || 0) + 1;
       g.lastHit = { t: g.time, kill: false };
-      hitBot.hp -= def.dmg;
+      var bDmg = zoneDmg(def, hitH, hitBot);
+      hitBot.hp -= bDmg;
       hitBot.hurtAt = g.time;
       var bz = (hitBot.z || 0) + 1.15;
       addEffect(g, p.x + Math.cos(ang) * hitT, p.y + Math.sin(ang) * hitT, bz, 'spark');
@@ -246,7 +257,8 @@ var Sim = (function () {
       addTracer(g, p.x, p.y, res.x, res.y, res.z);
     }
     // 后坐力（开镜时更稳）
-    var rc = 1 - (1 - G.ADS_RECOIL) * p.ads;
+    var adsRecoil = def.adsRecoil !== undefined ? def.adsRecoil : G.ADS_RECOIL;
+    var rc = 1 - (1 - adsRecoil) * p.ads;
     p.recoil = Math.min(1.2, p.recoil + def.recoil * 0.35 * rc);
     p.pitch = clamp(p.pitch + def.recoil * 0.012 * rc, -G.PITCH_MAX, G.PITCH_MAX);
     p.lastShot = { x: res.x, y: res.y, hit: res.hit, t: g.time };
@@ -329,11 +341,12 @@ var Sim = (function () {
     p.pitch = clamp(p.pitch - input.mouseDY * G.MOUSE * 0.75, -G.PITCH_MAX, G.PITCH_MAX);
 
     /* 开镜：右键渐进收窄视野，同时降低移速与扩散 */
+    var def = p.def();
     var adsTarget = (input.aim && !input.shift) ? 1 : 0;
-    var adsK = clamp(dt / G.ADS_TIME, 0, 1);
+    var adsK = clamp(dt / (def.adsTime || G.ADS_TIME), 0, 1);
     p.ads += (adsTarget - p.ads) * clamp(adsK * 3.2, 0, 1);
     if (Math.abs(p.ads - adsTarget) < 0.01) p.ads = adsTarget;
-    p.fov = G.FOV + (G.FOV_ADS - G.FOV) * p.ads;
+    p.fov = G.FOV + ((def.adsFov || G.FOV_ADS) - G.FOV) * p.ads;
 
     /* ---------- 蹲 / 滑铲 / 跳跃 ---------- */
     var speedNow = Math.hypot(p.vx, p.vy);
@@ -378,7 +391,8 @@ var Sim = (function () {
     var speed = (input.shift ? G.SPRINT : G.WALK);
     if (p.reloadT > 0) speed *= 0.85;
     if (p.crouch) speed *= 0.55;
-    if (p.ads > 0.05) speed *= (1 - (1 - G.ADS_SPEED) * p.ads);
+    var adsSpd = def.adsSpeed !== undefined ? def.adsSpeed : G.ADS_SPEED;
+    if (p.ads > 0.05) speed *= (1 - (1 - adsSpd) * p.ads);
 
     var dirX = Math.cos(p.angle), dirY = Math.sin(p.angle);
     var wishX = dirX * fwd - dirY * strafe;

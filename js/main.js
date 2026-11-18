@@ -25,7 +25,7 @@
   Input.bind(canvas, onLockChange);
 
   function loadGuns() {
-    ['rifle', 'pistol'].forEach(function (k) {
+    ['rifle', 'pistol', 'spr'].forEach(function (k) {
       var im = new Image();
       im.onload = function () { gunImg[k] = im; };
       im.src = 'assets/tex/' + k + '.png';
@@ -78,7 +78,9 @@
     if (game.players.length > 1) game.players.length = 1;
     game.remotes = null;
     player = game.players[0];
+    player.primary = primaryWeapon;
     player.respawn(MapData.spawns[0]);
+    player.weapon = primaryWeapon;
     game.time = 0;
     game.effects.length = 0;
     game.decals.length = 0;
@@ -148,6 +150,37 @@
       for (var k = 0; k < diffBtns.length; k++) diffBtns[k].classList.toggle('on', diffBtns[k] === this);
     });
   }
+
+  /* ---------- 主武器选择（菜单里切换，记在本地） ---------- */
+  var WEAPON_KEY = 'cod-primary-weapon';
+  var WEAPON_TIP = {
+    rifle: 'M4A1：全自动，30 发，中距离压制，开镜快',
+    spr: 'SPR-208：栓动狙击，胸部一枪致命，开镜慢、移动慢、弹匣 5 发'
+  };
+  var primaryWeapon = 'rifle';
+  try { primaryWeapon = localStorage.getItem(WEAPON_KEY) || 'rifle'; } catch (e) { }
+  if (!WEAPONS[primaryWeapon]) primaryWeapon = 'rifle';
+
+  var weaponBtns = document.querySelectorAll('#primarySel .chip[data-weapon]');
+  var weaponTipEl = document.getElementById('weaponTip');
+  function applyPrimary() {
+    for (var i = 0; i < weaponBtns.length; i++) {
+      weaponBtns[i].classList.toggle('on', weaponBtns[i].getAttribute('data-weapon') === primaryWeapon);
+    }
+    if (weaponTipEl) weaponTipEl.textContent = WEAPON_TIP[primaryWeapon] || '';
+    try { localStorage.setItem(WEAPON_KEY, primaryWeapon); } catch (e) { }
+    if (player) {
+      player.primary = primaryWeapon;
+      if (player.weapon === 'rifle' || player.weapon === 'spr') player.weapon = primaryWeapon;
+    }
+  }
+  for (var wbi = 0; wbi < weaponBtns.length; wbi++) {
+    weaponBtns[wbi].addEventListener('click', function () {
+      primaryWeapon = this.getAttribute('data-weapon');
+      applyPrimary();
+    });
+  }
+  applyPrimary();
 
   /* ---------- 模式 / 房间 ---------- */
   var onlineMode = false;
@@ -220,16 +253,61 @@
   if (quitBtn) quitBtn.addEventListener('click', backToMenu);
   if (menuBtn) menuBtn.addEventListener('click', backToMenu);
 
+  /* ---------- 狙击镜 ---------- */
+  function drawScope(ctx, p) {
+    var a = clamp((p.ads - 0.35) / 0.45, 0, 1);   /* 开镜过半才盖镜 */
+    if (a <= 0) return;
+    var cx = G.W / 2, cy = G.H / 2;
+    var r = Math.min(G.W, G.H) * 0.42;
+    ctx.save();
+    ctx.globalAlpha = a;
+    /* 镜筒外全黑 */
+    ctx.beginPath();
+    ctx.rect(0, 0, G.W, G.H);
+    ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
+    ctx.fillStyle = 'rgba(0,0,0,0.96)';
+    ctx.fill();
+    /* 镜圈 */
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(120,130,145,0.85)';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(20,22,26,0.9)';
+    ctx.beginPath(); ctx.arc(cx, cy, r + 3, 0, Math.PI * 2); ctx.stroke();
+    /* 十字分划 + 密位点 */
+    ctx.strokeStyle = 'rgba(12,12,14,0.92)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.86, cy); ctx.lineTo(cx - 6, cy);
+    ctx.moveTo(cx + 6, cy); ctx.lineTo(cx + r * 0.86, cy);
+    ctx.moveTo(cx, cy - r * 0.86); ctx.lineTo(cx, cy - 6);
+    ctx.moveTo(cx, cy + 6); ctx.lineTo(cx, cy + r * 0.86);
+    ctx.stroke();
+    for (var d = 1; d <= 4; d++) {
+      var yy = cy + d * r * 0.14;
+      ctx.fillStyle = 'rgba(12,12,14,0.92)';
+      ctx.fillRect(cx - 1, yy, 2, 2);
+      ctx.fillRect(cx - d * r * 0.1, cy - 1, 2, 2);
+      ctx.fillRect(cx + d * r * 0.1, cy - 1, 2, 2);
+    }
+    ctx.restore();
+  }
+
   /* ---------- 枪械绘制 ---------- */
   function drawGun(ctx, p) {
     var img = gunImg[p.weapon];
+    if (p.weapon === 'spr' && !img) img = gunImg.rifle;
     if (!img) return;
+    /* 狙击开镜时不出枪，只出镜 */
+    if (p.weapon === 'spr' && p.ads > 0.72) { lastMuzzle.x = G.W / 2; lastMuzzle.y = G.H / 2; return; }
     var isRifle = p.weapon === 'rifle';
-    var scale = isRifle ? 1.55 : 1.7;
+    var isSpr = p.weapon === 'spr';
+    var scale = isSpr ? 1.62 : (isRifle ? 1.55 : 1.7);
     var gw = img.width * scale, gh = img.height * scale;
     var bobX = Math.sin(p.bob) * 3 * p.moving;
     var bobY = Math.abs(Math.cos(p.bob)) * 3 * p.moving;
-    var x = G.W - gw + 26 + bobX + p.recoil * -6;
+    var xOff = isSpr ? -4 : 26;
+    var x = G.W - gw + xOff + bobX + p.recoil * -6;
     var y = G.H - gh + 2 + bobY + p.recoil * 10;
     /* 枪口朝向屏幕中心（准星）——不让枪管横着指右边 */
     var rot = -0.15 + p.recoil * -0.03;
@@ -781,6 +859,8 @@
     game.players.push(p2);
     game.players[0].side = 0;
     player = game.players[mySide];
+    player.primary = primaryWeapon;
+    player.weapon = primaryWeapon;
     game.bots = [];
     game.remotes = [game.players[1 - mySide]];
     game.match = { target: 25, limit: 300, left: 300, over: false, player: 0, bot: 0 };
@@ -857,7 +937,7 @@
 
   function onlineFrame(dt) {
     var inp = Input.read();
-    if (inp.pick === 0 && player.weapon !== 'rifle') player.weapon = 'rifle';
+    if (inp.pick === 0 && player.weapon !== player.primary) player.weapon = player.primary;
     else if (inp.pick === 1 && player.weapon !== 'pistol') player.weapon = 'pistol';
 
     if (net && net.role === 'host') {
@@ -902,8 +982,8 @@
         onlineFrame(dt);
       } else {
         var input = Input.read();
-        if (input.pick === 0) player.weapon = 'rifle';
-        else if (input.pick === 1) player.weapon = 'pistol';
+        if (input.pick === 0 && player.weapon !== player.primary) player.weapon = player.primary;
+        else if (input.pick === 1 && player.weapon !== 'pistol') player.weapon = 'pistol';
         var s0 = game.shots, bh0 = game.botHits || 0, k0 = game.match.player;
         var lk0 = game.lastKill ? game.lastKill.t : -1;
         var hp0 = player.hp, rl0 = player.reloadT;
@@ -942,8 +1022,9 @@
       drawBots(canvas.getContext('2d'));
       if (state === 'play') {
         drawGun(canvas.getContext('2d'), player);
+        drawScope(canvas.getContext('2d'), player);
         drawRadar(canvas.getContext('2d'));
-        Hud.drawCrosshair(canvas.getContext('2d'), player, game);
+        if (!(player.weapon === 'spr' && player.ads > 0.55)) Hud.drawCrosshair(canvas.getContext('2d'), player, game);
         drawKillFx(canvas.getContext('2d'));
         /* 受伤红色边缘 + 开镜暗角 */
         var c2 = canvas.getContext('2d');

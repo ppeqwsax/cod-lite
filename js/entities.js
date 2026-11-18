@@ -21,8 +21,9 @@ function Player(spawn) {
   this.hurtAt = -99;
 
   this.weapon = 'rifle';
-  this.ammo = { rifle: WEAPONS.rifle.mag, pistol: WEAPONS.pistol.mag };
-  this.reserve = { rifle: WEAPONS.rifle.reserve, pistol: WEAPONS.pistol.reserve };
+  this.primary = 'rifle';   /* 主武器：rifle / spr，菜单里选 */
+  this.ammo = { rifle: WEAPONS.rifle.mag, pistol: WEAPONS.pistol.mag, spr: WEAPONS.spr.mag };
+  this.reserve = { rifle: WEAPONS.rifle.reserve, pistol: WEAPONS.pistol.reserve, spr: WEAPONS.spr.reserve };
 
   this.fireCd = 0;
   this.reloadT = 0;      // 剩余换弹时间
@@ -47,8 +48,10 @@ Player.prototype.respawn = function (spawn) {
   this.hp = G.MAX_HP; this.alive = true;
   this.ammo.rifle = WEAPONS.rifle.mag;
   this.ammo.pistol = WEAPONS.pistol.mag;
+  this.ammo.spr = WEAPONS.spr.mag;
   this.reserve.rifle = WEAPONS.rifle.reserve;
   this.reserve.pistol = WEAPONS.pistol.reserve;
-  this.weapon = 'rifle';
+  this.reserve.spr = WEAPONS.spr.reserve;
+  this.weapon = this.primary || 'rifle';
   this.reloadT = 0; this.fireCd = 0; this.recoil = 0; this.muzzle = 0;
 };
