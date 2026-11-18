@@ -10,7 +10,15 @@ var Input = (function () {
   var canvasEl = null;
   var onLock = null;
 
+  /* 焦点在输入框/文本域时不要吞键，否则房间码打不进去 */
+  function typingIn(e) {
+    var t = e && e.target;
+    if (!t || !t.tagName) return false;
+    return t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable;
+  }
+
   function down(e) {
+    if (typingIn(e)) return;
     var c = e.code;
     if (c === 'KeyW') state.keyW = true;
     else if (c === 'KeyA') state.keyA = true;
@@ -26,6 +34,7 @@ var Input = (function () {
     if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space'].indexOf(c) >= 0) e.preventDefault();
   }
   function up(e) {
+    if (typingIn(e)) return;
     var c = e.code;
     if (c === 'KeyW') state.keyW = false;
     else if (c === 'KeyA') state.keyA = false;

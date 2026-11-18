@@ -72,8 +72,15 @@
 
   function show(el, on) { if (el) el.classList.toggle('hidden', !on); }
 
+  /* 开始游戏/建房前把焦点从输入框拿走，否则 WASD 全被输入框吃掉 */
+  function blurInputs() {
+    var el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) el.blur();
+  }
+
   function startGame() {
     if (!player) return;
+    blurInputs();
     if (online) { endOnline(); }
     if (game.players.length > 1) game.players.length = 1;
     game.remotes = null;
@@ -213,6 +220,13 @@
   });
   if (roomInput) roomInput.addEventListener('input', function () {
     this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+  });
+  if (roomInput) roomInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      var code = (this.value || '').toUpperCase().trim();
+      if (code) joinRoom(code); else netSet('先输入 5 位房间码');
+      this.blur();
+    }
   });
   if (onlineTest) setMode(true);
 
@@ -878,6 +892,7 @@
   }
 
   function createRoom() {
+    blurInputs();
     if (net) { net.close(); net = null; }
     net = Net.host({
       peer: function () {
@@ -907,6 +922,7 @@
 
   function joinRoom(code) {
     if (!code) { netSet('先输入房间码'); return; }
+    blurInputs();
     if (net) { net.close(); net = null; }
     net = Net.join(code, {
       peer: function () { },
