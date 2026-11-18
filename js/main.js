@@ -32,6 +32,7 @@
     crate: 'assets/tex/crate.png',
     metal: 'assets/tex/metal.png',
     door: 'assets/tex/container_door.png',
+    fence: 'assets/tex/fence.png',
     floor: 'assets/tex/floor.png',
     ceil: 'assets/tex/ceiling.png'
   }, function () {

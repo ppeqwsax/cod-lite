@@ -194,6 +194,7 @@ var Render = (function () {
       case TEX.CRATE: return 'crate';
       case TEX.METAL: return 'metal';
       case TEX.DOOR: return 'door';
+      case TEX.FENCE: return 'fence';
       default: return null;
     }
   }
