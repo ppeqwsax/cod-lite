@@ -90,9 +90,26 @@ var MapData = (function () {
     return false;
   }
 
+  /* 全图空地格中心（缓存），给复活点选择用 */
+  var freeCache = null;
+  function freeCells() {
+    if (freeCache) return freeCache;
+    var out = [];
+    for (var ty = 1; ty < H - 1; ty++) {
+      for (var tx = 1; tx < W - 1; tx++) {
+        if (solid(tx, ty)) continue;
+        var wx = (tx + 0.5) * G.TILE, wy = (ty + 0.5) * G.TILE;
+        if (!blocked(wx, wy, G.R + 0.05)) out.push({ x: wx, y: wy });
+      }
+    }
+    freeCache = out;
+    return out;
+  }
+
   return {
     W: W, H: H, grid: grid,
     spawns: spawns,
-    at: at, h: h, solid: solid, solidAt: solidAt, blocked: blocked
+    at: at, h: h, solid: solid, solidAt: solidAt, blocked: blocked,
+    freeCells: freeCells
   };
 })();

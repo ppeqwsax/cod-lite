@@ -121,18 +121,49 @@ var Sim = (function () {
     }
   }
 
+  /* 复活：避开对手（>=12 米）、优先看不见/有掩体的空地，不再固定四个点 */
   function respawnPlayer(g, p) {
-    var best = MapData.spawns[0], bestScore = -1;
-    for (var i = 0; i < MapData.spawns.length; i++) {
-      var s = MapData.spawns[i], dmin = 1e9;
-      for (var j = 0; j < g.bots.length; j++) {
-        var b = g.bots[j];
-        if (!b.alive) continue;
-        dmin = Math.min(dmin, dist(s.x, s.y, b.x, b.y));
-      }
-      if (dmin > bestScore) { bestScore = dmin; best = s; }
+    var foes = [];
+    for (var i = 0; i < g.bots.length; i++) if (g.bots[i].alive) foes.push(g.bots[i]);
+    for (var k = 0; k < g.players.length; k++) {
+      if (g.players[k] !== p && g.players[k].alive) foes.push(g.players[k]);
     }
-    p.respawn(best);
+
+    var cells = MapData.freeCells(), best = null, bestScore = -1e9, bestAng = -Math.PI / 2;
+    var tries = Math.min(cells.length, 260);
+    for (var t = 0; t < tries; t++) {
+      var c = cells[(Math.random() * cells.length) | 0];
+      var dmin = 1e9, seen = false, nearest = null;
+      for (var f = 0; f < foes.length; f++) {
+        var e = foes[f], d = dist(c.x, c.y, e.x, e.y);
+        if (d < dmin) { dmin = d; nearest = e; }
+        if (d < 34) {
+          var hit = castRay(e.x, e.y, Math.atan2(c.y - e.y, c.x - e.x), d + 1);
+          if (hit && hit.dist >= d - 0.4) seen = true;
+        }
+      }
+      if (dmin < 12) continue;                    /* 不许在对手 12 米内复活 */
+      /* 距离够远 + 看不见就加分；距离上限压到 20 米，留随机量让落点不总在同一个角 */
+      var score = Math.min(dmin, 20) + (seen ? -14 : 6) + Math.random() * 9;
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+        bestAng = nearest ? Math.atan2(nearest.y - c.y, nearest.x - c.x) : -Math.PI / 2;
+      }
+    }
+
+    if (!best) {
+      /* 兜底：四个固定出生点里挑离对手最远的一个 */
+      best = MapData.spawns[0];
+      var bs = -1;
+      for (var s2 = 0; s2 < MapData.spawns.length; s2++) {
+        var sp = MapData.spawns[s2], dm = 1e9;
+        for (var j2 = 0; j2 < foes.length; j2++) dm = Math.min(dm, dist(sp.x, sp.y, foes[j2].x, foes[j2].y));
+        if (dm > bs) { bs = dm; best = sp; }
+      }
+      bestAng = best.a !== undefined ? best.a : -Math.PI / 2;
+    }
+    p.respawn({ x: best.x, y: best.y, a: bestAng });
   }
 
   /* 命中部位倍率：头 1.55m 以上算头，0.85m 以下算腿 */
