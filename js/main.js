@@ -251,38 +251,74 @@
       if (!feet || !head) continue;
       var h = feet.y - head.y;
       if (h < 3) continue;
-      var w = h * 0.38, cx = feet.x;
+      var w = h * 0.36, cx = feet.x;
+      var flash = b.hurtAt && game.time - b.hurtAt < 0.08;
+      var walk = b.walk || 0;
+      var legSwing = Math.sin(walk * 9) * h * 0.035;
 
-      /* 腿 */
-      ctx.fillStyle = '#242830';
-      ctx.fillRect(cx - w * 0.34, feet.y - h * 0.46, w * 0.3, h * 0.46);
-      ctx.fillRect(cx + w * 0.04, feet.y - h * 0.46, w * 0.3, h * 0.46);
-      /* 躯干 */
-      ctx.fillStyle = b.hurtAt && game.time - b.hurtAt < 0.08 ? '#ffffff' : '#c8483a';
-      ctx.fillRect(cx - w * 0.42, feet.y - h * 0.84, w * 0.84, h * 0.4);
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.fillRect(cx - w * 0.42, feet.y - h * 0.6, w * 0.84, h * 0.05);
-      /* 头 */
-      ctx.fillStyle = '#e6c49b';
-      ctx.fillRect(cx - w * 0.21, feet.y - h * 0.99, w * 0.42, h * 0.16);
+      /* 脚下影子，让他看起来站在地上 */
+      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      ctx.beginPath();
+      ctx.ellipse(cx, feet.y, w * 0.42, Math.max(1.6, h * 0.028), 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      /* 腿（带走路摆动） */
+      ctx.fillStyle = '#2a2f38';
+      ctx.fillRect(cx - w * 0.30, feet.y - h * 0.46 + legSwing, w * 0.24, h * 0.46);
+      ctx.fillRect(cx + w * 0.06, feet.y - h * 0.46 - legSwing, w * 0.24, h * 0.46);
+      /* 靴子 */
+      ctx.fillStyle = '#171a20';
+      ctx.fillRect(cx - w * 0.32, feet.y - h * 0.06 + legSwing, w * 0.28, h * 0.06);
+      ctx.fillRect(cx + w * 0.04, feet.y - h * 0.06 - legSwing, w * 0.28, h * 0.06);
+
+      /* 躯干（战术背心 + 肩带） */
+      ctx.fillStyle = flash ? '#ffffff' : '#b8433a';
+      ctx.fillRect(cx - w * 0.40, feet.y - h * 0.86, w * 0.80, h * 0.42);
+      ctx.fillStyle = flash ? '#ffffff' : '#7f2f28';
+      ctx.fillRect(cx - w * 0.40, feet.y - h * 0.86, w * 0.80, h * 0.06);
+      ctx.fillStyle = 'rgba(0,0,0,0.30)';
+      ctx.fillRect(cx - w * 0.40, feet.y - h * 0.66, w * 0.80, h * 0.035);
+      ctx.fillRect(cx - w * 0.06, feet.y - h * 0.84, w * 0.12, h * 0.34);
+
+      /* 手臂（持枪） */
+      ctx.fillStyle = flash ? '#ffffff' : '#a13b33';
+      ctx.fillRect(cx + w * 0.16, feet.y - h * 0.79, w * 0.34, h * 0.09);
+      ctx.fillRect(cx - w * 0.30, feet.y - h * 0.72, w * 0.34, h * 0.09);
+
+      /* 头 + 头盔 */
+      ctx.fillStyle = flash ? '#ffffff' : '#e2bd93';
+      ctx.fillRect(cx - w * 0.17, feet.y - h * 0.99, w * 0.34, h * 0.14);
+      ctx.fillStyle = flash ? '#ffffff' : '#3c4a3a';
+      ctx.fillRect(cx - w * 0.20, feet.y - h * 1.02, w * 0.40, h * 0.06);
+      ctx.fillStyle = '#2b342b';
+      ctx.fillRect(cx - w * 0.17, feet.y - h * 0.94, w * 0.34, h * 0.025);
+
       /* 枪 */
-      ctx.fillStyle = '#20242a';
-      ctx.fillRect(cx - w * 0.1, feet.y - h * 0.78, w * 0.95, Math.max(1, h * 0.055));
+      ctx.fillStyle = '#1d2127';
+      ctx.fillRect(cx + w * 0.02, feet.y - h * 0.74, w * 0.86, Math.max(1, h * 0.05));
+      ctx.fillStyle = '#2a2f36';
+      ctx.fillRect(cx + w * 0.10, feet.y - h * 0.68, w * 0.22, Math.max(1, h * 0.06));
+
       /* 枪口火焰 */
       if (b.muzzle > 0) {
         ctx.fillStyle = '#ffe08a';
         var fr = Math.max(2, h * 0.07);
         ctx.beginPath();
-        ctx.arc(cx + w * 0.85, feet.y - h * 0.76, fr, 0, Math.PI * 2);
+        ctx.arc(cx + w * 0.9, feet.y - h * 0.715, fr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,230,160,0.35)';
+        ctx.beginPath();
+        ctx.arc(cx + w * 0.9, feet.y - h * 0.715, fr * 2, 0, Math.PI * 2);
         ctx.fill();
       }
+
       /* 血条 */
       if (b.hp < G.MAX_HP) {
         var bw = w * 0.9;
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.fillRect(cx - bw / 2, head.y - 6, bw, 3);
-        ctx.fillStyle = '#7ce08a';
-        ctx.fillRect(cx - bw / 2, head.y - 6, bw * (b.hp / G.MAX_HP), 3);
+        ctx.fillRect(cx - bw / 2, head.y - 7, bw, 3);
+        ctx.fillStyle = b.hp / G.MAX_HP > 0.5 ? '#7ce08a' : (b.hp / G.MAX_HP > 0.25 ? '#ffc451' : '#ff5f5f');
+        ctx.fillRect(cx - bw / 2, head.y - 7, bw * Math.max(0, b.hp / G.MAX_HP), 3);
       }
     }
   }
@@ -337,30 +373,33 @@
     ctx.lineTo(Math.cos(sweep) * S, Math.sin(sweep) * S);
     ctx.stroke();
 
-    /* 敌人红点（脉冲显形 + 开火显形，会淡出） */
+    /* 敌人红点：扫到后定住位置不消失，直到下次扫描更新 */
     for (var i = 0; i < game.bots.length; i++) {
       var b = game.bots[i];
-      if (!b.alive) continue;
-      var life = game.time - (b.seenAt || -99);
-      if (life > G.RADAR_HOLD || life < 0) continue;
-      var a = 1 - life / G.RADAR_HOLD;
+      if (!b.alive || !b.lastSeen) continue;
       /* 大概位置：取整到 1.5 米 */
-      var rx = Math.round(b.x / 1.5) * 1.5, ry = Math.round(b.y / 1.5) * 1.5;
+      var rx = Math.round(b.lastSeen.x / 1.5) * 1.5, ry = Math.round(b.lastSeen.y / 1.5) * 1.5;
       var dx = rx - player.x, dy = ry - player.y;
       var rot2 = -player.angle - Math.PI / 2;
       var rx2 = dx * Math.cos(rot2) - dy * Math.sin(rot2);
       var ry2 = dx * Math.sin(rot2) + dy * Math.cos(rot2);
       if (Math.hypot(rx2, ry2) > S * 0.5) continue;
-      ctx.globalAlpha = 0.3 + a * 0.7;
-      ctx.fillStyle = '#ff5252';
+      var px2 = rx2 * scale, py2 = ry2 * scale;
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = '#ff2d2d';
       ctx.beginPath();
-      ctx.arc(rx2 * scale, ry2 * scale, 2.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.16 * a;
-      ctx.beginPath();
-      ctx.arc(rx2 * scale, ry2 * scale, 7, 0, Math.PI * 2);
+      ctx.arc(px2, py2, 7.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ff3b3b';
+      ctx.beginPath();
+      ctx.arc(px2, py2, 2.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,120,120,0.85)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(px2, py2, 2.9, 0, Math.PI * 2);
+      ctx.stroke();
     }
     ctx.restore();
 
@@ -396,7 +435,8 @@
     radarPulse = game.time;
     for (var i = 0; i < game.bots.length; i++) {
       var b = game.bots[i];
-      if (b.alive) b.seenAt = game.time + Math.random() * 0.12;
+      /* 扫到就记住这个位置，之后一直定在那儿，直到下次扫到新的位置 */
+      if (b.alive) b.lastSeen = { x: b.x, y: b.y, t: game.time };
     }
   }
 

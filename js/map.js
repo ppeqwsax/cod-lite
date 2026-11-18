@@ -45,9 +45,26 @@ var MapData = (function () {
   var spawns = [
     sp(15.5, 28.5, -Math.PI / 2),  // 下方中央，朝上
     sp(15.5, 2.5, Math.PI / 2),    // 上方中央，朝下
-    sp(3.5, 29.5, -Math.PI / 2),   // 左下角
-    sp(28.5, 29.5, -Math.PI / 2)   // 右下角
+    sp(4.5, 26.5, -Math.PI / 2),   // 左下角空地
+    sp(27.5, 26.5, -Math.PI / 2)   // 右下角空地
   ];
+
+  /* 兜底：万一某个出生点被箱子占了，就往外找最近能站的地方 */
+  function nearestFree(wx, wy) {
+    if (!blocked(wx, wy, G.R)) return { x: wx, y: wy };
+    for (var r = 1; r <= 12; r++) {
+      for (var a = 0; a < 12; a++) {
+        var ang = (a / 12) * Math.PI * 2;
+        var nx = wx + Math.cos(ang) * r, ny = wy + Math.sin(ang) * r;
+        if (!blocked(nx, ny, G.R)) return { x: nx, y: ny };
+      }
+    }
+    return { x: wx, y: wy };
+  }
+  spawns.forEach(function (s) {
+    var f = nearestFree(s.x, s.y);
+    s.x = f.x; s.y = f.y;
+  });
 
   function at(tx, ty) {
     if (tx < 0 || ty < 0 || tx >= W || ty >= H) return TEX.METAL;

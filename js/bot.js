@@ -60,6 +60,20 @@ var Bot = (function () {
     return null;
   }
 
+  /* 在「离目标点 4~12 米」的范围里随机取一格：让 bot 主动往玩家方向靠，避免全场找不到人 */
+  function cellNear(tx0, ty0, minD, maxD) {
+    for (var i = 0; i < 90; i++) {
+      var a = Math.random() * Math.PI * 2;
+      var r = minD + Math.random() * (maxD - minD);
+      var tx = Math.round(tx0 / G.TILE + Math.cos(a) * r / G.TILE);
+      var ty = Math.round(ty0 / G.TILE + Math.sin(a) * r / G.TILE);
+      if (tx < 1 || ty < 1 || tx >= W - 1 || ty >= H - 1) continue;
+      if (MapData.solid(tx, ty)) continue;
+      return { tx: tx, ty: ty };
+    }
+    return null;
+  }
+
   function create(spawn, level) {
     return {
       name: 'BOT',
@@ -72,7 +86,8 @@ var Bot = (function () {
       path: null, pathI: 0, repathT: 0,
       see: false, seeT: 0, aimErr: 0, aimErrT: 0,
       strafe: 0, strafeT: 0,
-      respawnT: 0, kills: 0, deaths: 0
+      respawnT: 0, kills: 0, deaths: 0,
+      lastSeen: null, walk: 0
     };
   }
 
@@ -86,7 +101,10 @@ var Bot = (function () {
 
   function repath(b, p) {
     var here = { tx: cellX(b.x), ty: cellX(b.y) };
-    var goal = randomFreeCell(9, p.x, p.y) || { tx: here.tx, ty: here.ty };
+    var far = dist(b.x, b.y, p.x, p.y) > 14;
+    /* 离得远就直接往玩家附近走，离得近就随机绕一绕，保证能遇上人 */
+    var goal = ((far || Math.random() < 0.6) ? cellNear(p.x, p.y, 3, 9) : null)
+      || randomFreeCell(9, p.x, p.y) || { tx: here.tx, ty: here.ty };
     var path = findPath(here.tx, here.ty, goal.tx, goal.ty);
     b.path = path;
     b.pathI = 0;
@@ -109,6 +127,8 @@ var Bot = (function () {
 
     b.seeT -= dt;
     if (b.seeT <= 0) { b.see = canSee(b, p); b.seeT = 0.18; }
+
+    var sx0 = b.x, sy0 = b.y;
 
     var def = weaponDefOf(b);
     var speed = G.WALK * b.level.speed;
@@ -149,6 +169,22 @@ var Bot = (function () {
         }
       }
     }
+
+    /* 卡住检测：贴着箱角原地不动就强制重新选路 */
+    if (Math.hypot(b.x - sx0, b.y - sy0) < 0.02) {
+      b.stuckT = (b.stuckT || 0) + dt;
+      if (b.stuckT > 0.55) {
+        b.stuckT = 0; b.path = null; b.repathT = 0;
+        /* 先侧移一下脱困 */
+        var ea = b.angle + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2;
+        moveBy(b, Math.cos(ea) * 0.6, Math.sin(ea) * 0.6);
+      }
+    } else {
+      b.stuckT = 0;
+    }
+
+    /* 走路摆动用 */
+    b.walk += Math.hypot(b.x - sx0, b.y - sy0) * 2.4;
   }
 
   function moveBy(b, dx, dy) {
@@ -165,6 +201,7 @@ var Bot = (function () {
     b.fireCd = b.burstLeft > 0 ? 60 / def.rpm * 1.3 : 0.55 + Math.random() * 0.35;
     b.muzzle = 0.06;
     b.seenAt = g.time + 0.5;   // 开火会暴露位置，小地图上会亮一下
+    b.lastSeen = { x: b.x, y: b.y, t: g.time };
 
     var wall = Sim.castRay(b.x, b.y, ang, def.range);
     var hit = Sim.rayHitPlayer(b.x, b.y, ang, wall.dist, p);
@@ -173,16 +210,28 @@ var Bot = (function () {
     if (!hit && wall.hit) Sim.addHitMark(g, wall.x, wall.y);
   }
 
+  /* 选一个离玩家远、且不和别的 bot 挤在一起的出生点 */
   function respawn(b, g, p) {
-    var best = null, bestD = -1;
+    var best = null, bestScore = -1e9;
     for (var i = 0; i < MapData.spawns.length; i++) {
       var s = MapData.spawns[i];
-      var d = dist(s.x, s.y, p.x, p.y);
-      if (d > bestD) { bestD = d; best = s; }
+      var dPlayer = dist(s.x, s.y, p.x, p.y);
+      var dMate = 1e9;
+      for (var j = 0; j < g.bots.length; j++) {
+        var o = g.bots[j];
+        if (o === b || !o.alive) continue;
+        dMate = Math.min(dMate, dist(s.x, s.y, o.x, o.y));
+      }
+      /* 离玩家 8~20 米最合适：太近不公平，太远半天遇不上 */
+      var score = -Math.abs(dPlayer - 13) + Math.min(dMate, 12) * 0.7 + Math.random() * 2;
+      if (score > bestScore) { bestScore = score; best = s; }
     }
+    if (!best) best = MapData.spawns[0];
     b.x = best.x; b.y = best.y; b.angle = best.a;
     b.hp = G.MAX_HP; b.alive = true; b.path = null;
     b.fireCd = 0; b.reloadT = 0; b.muzzle = 0;
+    b.lastSeen = null; b.seenAt = -99; b.burstLeft = 0;
+    b.spawnAt = g.time;
   }
 
   function weaponDefOf(b) { return WEAPONS[b.weapon] || WEAPONS.rifle; }
