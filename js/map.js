@@ -24,21 +24,14 @@ var MapData = (function () {
   rect(0, 0, 1, H, TEX.FENCE);
   rect(W - 1, 0, 1, H, TEX.FENCE);
 
-  // 四角的集装箱堆（每块都自动镜像到四个角）
-  sym(2, 2, 6, 2, TEX.RED);
-  sym(2, 6, 2, 4, TEX.BLUE);
-  sym(6, 6, 3, 2, TEX.GREEN);
-  sym(10, 2, 2, 5, TEX.BLUE);
-  sym(10, 9, 4, 2, TEX.RED);
-  sym(3, 11, 3, 2, TEX.GREEN);
-  sym(7, 11, 2, 1, TEX.CRATE);
-  sym(12, 6, 2, 2, TEX.DOOR);
+  // 四角的集装箱（每块自动镜像到四角）—— 数量减半，留出更多开阔通道
+  sym(2, 2, 5, 2, TEX.RED);
+  sym(3, 7, 2, 3, TEX.BLUE);
+  sym(9, 3, 2, 4, TEX.GREEN);
+  sym(8, 10, 3, 1, TEX.CRATE);
 
-  // 中央的箱堆
-  rect(14, 14, 2, 2, TEX.CRATE);
-  rect(16, 15, 2, 2, TEX.CRATE);
-  rect(15, 17, 2, 1, TEX.GREEN);
-  put(13, 15, TEX.CRATE); put(18, 14, TEX.CRATE);
+  // 中央的一小块掩体
+  rect(15, 15, 2, 2, TEX.CRATE);
 
   // 出生点：四角内侧的空地（格坐标 × TILE = 米），都朝场地中央
   function sp(tx, ty, a) { return { x: tx * G.TILE, y: ty * G.TILE, a: a }; }

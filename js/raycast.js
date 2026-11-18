@@ -35,7 +35,7 @@ var Render = (function () {
   function makeLevels(t) {
     var levels = [];
     for (var l = 0; l < LEVELS; l++) {
-      var k = 0.46 + 0.54 * Math.pow(l / (LEVELS - 1), 0.8);
+      var k = 0.62 + 0.38 * Math.pow(l / (LEVELS - 1), 0.75);
       var arr = new Uint32Array(t.px.length);
       for (var i = 0; i < t.px.length; i++) {
         var c = t.px[i];
@@ -107,7 +107,7 @@ var Render = (function () {
 
     /* 天空：地平线以上画渐变（露天货场），地面用贴图投射 */
     var floorTex = tex.floor;
-    var skyTopC = [58, 78, 104], skyHorC = [150, 166, 186];
+    var skyTopC = [96, 140, 198], skyHorC = [204, 220, 238];
     for (var y = 0; y < H; y++) {
       var row = y * W;
       if (y < horizon) {

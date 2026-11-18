@@ -5,8 +5,8 @@ var G = {
   TILE: 1.25,        // 一格 = 1.25 米
   MAP_W: 32,
   MAP_H: 32,
-  FOV: 96 * Math.PI / 180,   // 水平视野
-  FOV_ADS: 70 * Math.PI / 180, // 开镜视野
+  FOV: 104 * Math.PI / 180,   // 水平视野
+  FOV_ADS: 78 * Math.PI / 180, // 开镜视野
   ADS_TIME: 0.14,    // 开镜过渡时间
   ADS_SPEED: 0.62,   // 开镜移速倍率
   ADS_SPREAD: 0.45,  // 开镜后扩散倍率
