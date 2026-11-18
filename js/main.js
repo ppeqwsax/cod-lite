@@ -775,12 +775,14 @@
 
   /* ============================================================
      联机 1v1
-     房主：跑完整模拟（两名玩家），20Hz 发快照
-     客机：本地预测自己，30Hz 发输入，收到快照后校正/插值
+     房主：跑完整模拟（两名玩家），30Hz 发快照
+     客机：本地预测自己，60Hz 发输入，收到快照后校正/插值
      ============================================================ */
   var net = null, online = false, mySide = 0, remoteIn = {}, overSent = false, inCount = 0;
-  var snapAcc = 0, inAcc = 0, pingAcc = 0;
+  var snapAcc = 0, inAcc = 0, pingAcc = 0, prevFire = false;
   var remoteHist = [];
+  var remoteGap = 0.05;      /* 对手快照到达间隔（滑动平均），用来算最小插值延迟 */
+  var lastSnapAt = 0;
 
   function netSet(txt) {
     var el = document.getElementById('netStatus');
@@ -849,13 +851,18 @@
           pl.x = s.x; pl.y = s.y; pl.z = s.z; pl.vx = 0; pl.vy = 0;
         }
       } else {
-        /* 对手：存进历史缓冲，渲染时按 90ms 延迟插值，避免 20Hz 跳点 */
+        /* 对手：存进历史缓冲，渲染时插值；缓冲深度按 RTT/抖动自适应 */
         var now = performance.now() / 1000;
+        if (lastSnapAt) {
+          var gap = now - lastSnapAt;
+          if (gap > 0.004 && gap < 0.4) remoteGap = remoteGap * 0.82 + gap * 0.18;
+        }
+        lastSnapAt = now;
         remoteHist.push({
           t: now, x: s.x, y: s.y, z: s.z, a: s.a, p: s.p,
           ads: s.ads, wp: s.wp
         });
-        if (remoteHist.length > 16) remoteHist.shift();
+        if (remoteHist.length > 20) remoteHist.shift();
         pl.hp = s.hp; pl.alive = !!s.al;
         pl.weapon = s.wp ? 'pistol' : 'rifle';
         if (s.mz) pl.muzzle = 0.05;
@@ -863,15 +870,47 @@
     }
   }
 
-  /* 客机：把对手的 20Hz 快照插值成 60fps 平滑位置 */
+  /* 客机：把对手的快照插值成 60fps 平滑位置（延迟自适应，越快越省） */
+  function remoteDelay() {
+    var rtt = net && net.rtt ? net.rtt / 1000 : 0.04;
+    return clamp(rtt * 0.5 + remoteGap * 0.55 + 0.008, 0.032, 0.11);
+  }
+
   function smoothRemote() {
     if (!remoteHist.length) return;
     var pl = game.players[1 - mySide];
     if (!pl) return;
     var now = performance.now() / 1000;
-    var target = now - 0.09;
+    var target = now - remoteDelay();
     var n = remoteHist.length;
-    var a = remoteHist[0], b = remoteHist[n - 1];
+    var newest = remoteHist[n - 1];
+
+    /* 缓冲用尽：按最近两帧的速度往前推最多 90ms（撞墙就不推） */
+    if (target > newest.t) {
+      var prev = n > 1 ? remoteHist[n - 2] : newest;
+      var span = newest.t - prev.t;
+      var ahead = Math.min(target - newest.t, 0.09);
+      var px0 = pl.x, py0 = pl.y;
+      if (span > 0.002 && ahead > 0.002) {
+        var vx = (newest.x - prev.x) / span, vy = (newest.y - prev.y) / span;
+        var ex = newest.x + vx * ahead, ey = newest.y + vy * ahead;
+        pl.x = MapData.blocked(ex, ey, G.R) ? newest.x : ex;
+        pl.y = MapData.blocked(ex, ey, G.R) ? newest.y : ey;
+        pl.z = newest.z;
+        pl.angle = newest.a;
+        pl.pitch = newest.p;
+        pl.ads = newest.ads;
+      } else {
+        pl.x = newest.x; pl.y = newest.y; pl.z = newest.z;
+        pl.angle = newest.a; pl.pitch = newest.p; pl.ads = newest.ads;
+      }
+      var mv0 = Math.hypot(pl.x - px0, pl.y - py0);
+      pl.walk = (pl.walk || 0) + mv0 * 3;
+      pl.moving = mv0 > 0.004;
+      return;
+    }
+
+    var a = remoteHist[0], b = newest;
     for (var i = 0; i < n - 1; i++) {
       if (remoteHist[i].t <= target && remoteHist[i + 1].t >= target) {
         a = remoteHist[i]; b = remoteHist[i + 1];
@@ -991,7 +1030,7 @@
       Sim.stepPlayer(game, game.players[0], dt, inp);
       Sim.stepPlayer(game, game.players[1], dt, unpackInput(remoteIn));
       snapAcc += dt;
-      if (snapAcc >= 1 / 20) { snapAcc = 0; net._send({ t: 'snap', d: packSnapshot() }); }
+      if (snapAcc >= 1 / 30) { snapAcc = 0; net._send({ t: 'snap', d: packSnapshot() }); }
       if (game.match.over && !overSent) { overSent = true; net._send({ t: 'over', d: { p: game.match.player, b: game.match.bot } }); }
     } else if (net && net.role === 'guest') {
       /* 自己先本地跑一遍，手感立刻有反馈 */
@@ -999,7 +1038,10 @@
       Sim.ageEffects(game, dt);
       smoothRemote();
       inAcc += dt;
-      if (inAcc >= 1 / 30) { inAcc = 0; net._send({ t: 'in', d: packInput(inp) }); }
+      /* 开火边缘立即补发一包，不用等下一个 60Hz 采样点 */
+      if (inp.fire && !prevFire) { inAcc = 0; net._send({ t: 'in', d: packInput(inp) }); }
+      else if (inAcc >= 1 / 60) { inAcc = 0; net._send({ t: 'in', d: packInput(inp) }); }
+      prevFire = inp.fire;
     }
 
     pingAcc += dt;
