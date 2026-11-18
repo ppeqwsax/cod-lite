@@ -96,7 +96,14 @@ var Net = (function () {
 
   /* ---------- WebRTC 直连 ---------- */
   function Peer(isHost, signal, hooks) {
-    var pc = null, dc = null, open = false;
+    var pc = null, dc = null, open = false, pendingIce = [];
+
+    function flushIce() {
+      for (var i = 0; i < pendingIce.length; i++) {
+        try { pc.addIceCandidate(new RTCIceCandidate(pendingIce[i])); } catch (e) { }
+      }
+      pendingIce.length = 0;
+    }
 
     function setup() {
       if (!window.RTCPeerConnection) return false;
@@ -144,6 +151,7 @@ var Net = (function () {
         if (!pc) return;
         if (m.c === 'offer') {
           pc.setRemoteDescription(new RTCSessionDescription(m.d)).then(function () {
+            flushIce();
             return pc.createAnswer();
           }).then(function (a) {
             return pc.setLocalDescription(a);
@@ -151,8 +159,10 @@ var Net = (function () {
             signal({ c: 'answer', d: pc.localDescription });
           }).catch(function () { });
         } else if (m.c === 'answer') {
-          pc.setRemoteDescription(new RTCSessionDescription(m.d)).catch(function () { });
+          pc.setRemoteDescription(new RTCSessionDescription(m.d)).then(flushIce).catch(function () { });
         } else if (m.c === 'ice') {
+          /* 候选可能比 offer/answer 先到，先攒着 */
+          if (!pc.remoteDescription) { pendingIce.push(m.d); return; }
           try { pc.addIceCandidate(new RTCIceCandidate(m.d)); } catch (e) { }
         }
       },
