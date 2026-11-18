@@ -70,17 +70,18 @@ var Render = (function () {
   }
 
   /* ---------- 世界 → 屏幕 ---------- */
-  var cam = { px: 0, py: 0, dirX: 0, dirY: 0, planeX: 0, planeY: 0, horizon: H / 2, eyeT: 1 };
-  var VS = (W / 2) / Math.tan(G.FOV / 2);   // 1 格在 1 格距离处的像素高度
+  var cam = { px: 0, py: 0, dirX: 0, dirY: 0, planeX: 0, planeY: 0, horizon: H / 2, eyeT: 1, vs: W / 2 };
 
   function setCamera(p) {
     var tx = p.x / G.TILE, ty = p.y / G.TILE;
     cam.px = tx; cam.py = ty;
     cam.dirX = Math.cos(p.angle); cam.dirY = Math.sin(p.angle);
-    var fov = Math.tan(G.FOV / 2);
+    var fovRad = p.fov || G.FOV;
+    var fov = Math.tan(fovRad / 2);
     cam.planeX = -cam.dirY * fov; cam.planeY = cam.dirX * fov;
     cam.horizon = H / 2 + (p.pitch || 0) * H;
     cam.eyeT = (p.eyeM || G.EYE) / G.TILE;
+    cam.vs = (W / 2) / fov;                   // 1 格在 1 格距离处的像素高度
   }
 
   function project(wx, wy, z) {
@@ -92,7 +93,7 @@ var Render = (function () {
     var zT = (z === undefined ? cam.eyeT * G.TILE : z) / G.TILE;
     return {
       x: (W / 2) * (1 + tx / ty),
-      y: cam.horizon - (zT - cam.eyeT) * VS / ty,
+      y: cam.horizon - (zT - cam.eyeT) * cam.vs / ty,
       depth: ty
     };
   }
@@ -118,7 +119,7 @@ var Render = (function () {
         );
         for (var xs = 0; xs < W; xs++) buf[row + xs] = col;
       } else if (floorTex) {
-        var d2 = cam.eyeT * VS / Math.max(1, y - horizon);
+        var d2 = cam.eyeT * cam.vs / Math.max(1, y - horizon);
         var lvl2 = clamp((LEVELS - 1) - (d2 * 0.7) | 0, 1, LEVELS - 1) | 0;
         var arr2 = floorTex.levels[lvl2];
         var stepX2 = d2 * 2 * planeX / W, stepY2 = d2 * 2 * planeY / W;
@@ -159,8 +160,8 @@ var Render = (function () {
 
       /* 墙高按格子类型变化：围栏矮、集装箱高；脚踩地面，所以上下沿都跟着算 */
       var wh = MapData.h(mapX, mapY) || 2.4;
-      var half = cam.eyeT * VS / perp;              // 眼睛高度换算到屏幕像素
-      var lineH = (wh / G.TILE) * VS / perp;        // 墙高等价像素
+      var half = cam.eyeT * cam.vs / perp;              // 眼睛高度换算到屏幕像素
+      var lineH = (wh / G.TILE) * cam.vs / perp;        // 墙高等价像素
       var drawStart = horizon + half - lineH;      // 墙顶
       var y0 = Math.max(0, drawStart | 0);
       var y1 = Math.min(H - 1, (horizon + half) | 0);

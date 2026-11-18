@@ -3,7 +3,7 @@ var Input = (function () {
   var keys = {};
   var state = {
     keyW: false, keyA: false, keyS: false, keyD: false,
-    shift: false, fire: false, reload: false, jump: false, crouch: false,
+    shift: false, fire: false, reload: false, jump: false, crouch: false, aim: false,
     mouseDX: 0, mouseDY: 0,
     locked: false
   };
@@ -92,7 +92,7 @@ var Input = (function () {
     var out = {
       keyW: state.keyW, keyA: state.keyA, keyS: state.keyS, keyD: state.keyD,
       shift: state.shift, fire: state.fire, reload: state.reload,
-      jump: state.jump, crouch: state.crouch,
+      jump: state.jump, crouch: state.crouch, aim: state.aim,
       mouseDX: state.mouseDX, mouseDY: state.mouseDY,
       lock: state.locked, pick: state.pick
     };

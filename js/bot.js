@@ -164,6 +164,7 @@ var Bot = (function () {
     b.burstLeft--;
     b.fireCd = b.burstLeft > 0 ? 60 / def.rpm * 1.3 : 0.55 + Math.random() * 0.35;
     b.muzzle = 0.06;
+    b.seenAt = g.time + 0.5;   // 开火会暴露位置，小地图上会亮一下
 
     var wall = Sim.castRay(b.x, b.y, ang, def.range);
     var hit = Sim.rayHitPlayer(b.x, b.y, ang, wall.dist, p);

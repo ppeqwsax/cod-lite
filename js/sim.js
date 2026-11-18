@@ -131,7 +131,7 @@ var Sim = (function () {
     p.fireCd = 60 / def.rpm;
     p.muzzle = 0.05;
 
-    var spread = def.spread + (p.moving > 0.35 ? def.moveSpread : 0);
+    var spread = (def.spread + (p.moving > 0.35 ? def.moveSpread : 0)) * (1 - (1 - G.ADS_SPREAD) * p.ads);
     var ang = p.angle + (Math.random() - 0.5) * spread * 2;
     var eyeZ = p.eyeM || G.EYE;
     var res = castRay3(p.x, p.y, eyeZ, p.pitch, ang, def.range);
@@ -153,6 +153,7 @@ var Sim = (function () {
 
     if (hitBot) {
       g.hits++;
+      g.botHits = (g.botHits || 0) + 1;
       hitBot.hp -= def.dmg;
       hitBot.hurtAt = g.time;
       var bz = (hitBot.z || 0) + 1.15;
@@ -174,9 +175,10 @@ var Sim = (function () {
     } else {
       addTracer(g, p.x, p.y, res.x, res.y, res.z);
     }
-    // 后坐力
-    p.recoil = Math.min(1.2, p.recoil + def.recoil * 0.35);
-    p.pitch = clamp(p.pitch + def.recoil * 0.012, -G.PITCH_MAX, G.PITCH_MAX);
+    // 后坐力（开镜时更稳）
+    var rc = 1 - (1 - G.ADS_RECOIL) * p.ads;
+    p.recoil = Math.min(1.2, p.recoil + def.recoil * 0.35 * rc);
+    p.pitch = clamp(p.pitch + def.recoil * 0.012 * rc, -G.PITCH_MAX, G.PITCH_MAX);
     p.lastShot = { x: res.x, y: res.y, hit: res.hit, t: g.time };
     return true;
   }
@@ -221,6 +223,13 @@ var Sim = (function () {
     p.angle = normAngle(p.angle + input.mouseDX * G.MOUSE);
     p.pitch = clamp(p.pitch - input.mouseDY * G.MOUSE * 0.75, -G.PITCH_MAX, G.PITCH_MAX);
 
+    /* 开镜：右键渐进收窄视野，同时降低移速与扩散 */
+    var adsTarget = (input.aim && !input.shift) ? 1 : 0;
+    var adsK = clamp(dt / G.ADS_TIME, 0, 1);
+    p.ads += (adsTarget - p.ads) * clamp(adsK * 3.2, 0, 1);
+    if (Math.abs(p.ads - adsTarget) < 0.01) p.ads = adsTarget;
+    p.fov = G.FOV + (G.FOV_ADS - G.FOV) * p.ads;
+
     /* ---------- 蹲 / 滑铲 / 跳跃 ---------- */
     var speedNow = Math.hypot(p.vx, p.vy);
     if (p.slideT <= 0 && input.crouch && !p.crouchHeld && p.onGround && speedNow > G.WALK * 0.8) {
@@ -253,6 +262,7 @@ var Sim = (function () {
     var speed = (input.shift ? G.SPRINT : G.WALK);
     if (p.reloadT > 0) speed *= 0.85;
     if (p.crouch) speed *= 0.55;
+    if (p.ads > 0.05) speed *= (1 - (1 - G.ADS_SPEED) * p.ads);
 
     var dirX = Math.cos(p.angle), dirY = Math.sin(p.angle);
     var wishX = dirX * fwd - dirY * strafe;

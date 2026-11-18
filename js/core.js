@@ -6,6 +6,14 @@ var G = {
   MAP_W: 32,
   MAP_H: 32,
   FOV: 96 * Math.PI / 180,   // 水平视野
+  FOV_ADS: 70 * Math.PI / 180, // 开镜视野
+  ADS_TIME: 0.14,    // 开镜过渡时间
+  ADS_SPEED: 0.62,   // 开镜移速倍率
+  ADS_SPREAD: 0.45,  // 开镜后扩散倍率
+  ADS_RECOIL: 0.55,  // 开镜后后坐力倍率
+  RADAR_PULSE: 3.0,  // 小地图每 3 秒扫一次
+  RADAR_HOLD: 2.0,   // 红点显示时长
+  BOT_COUNT: 3,      // 人机数量
   EYE: 1.55,         // 站立眼睛高度（米）
   EYE_CROUCH: 1.05,  // 蹲下眼睛高度
   EYE_SLIDE: 0.85,   // 滑铲眼睛高度

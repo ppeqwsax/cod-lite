@@ -165,3 +165,5 @@ kbd {
 }
 .chip:hover { border-color: #4d5b70; }
 .chip.on { color: #0b0f14; background: #ffd27a; border-color: #ffd27a; font-weight: 700; }
+
+.keys .dim { opacity: 0.62; font-size: 11px; }

@@ -75,8 +75,14 @@
     game.decals.length = 0;
     game.tracers.length = 0;
     game.match = { target: 25, limit: 300, left: 300, over: false, player: 0, bot: 0 };
-    game.bots = [Bot.create(MapData.spawns[1], difficulty)];
+    game.bots = [];
+    var spawnOrder = [1, 2, 3, 0];
+    for (var bi2 = 0; bi2 < G.BOT_COUNT; bi2++) {
+      game.bots.push(Bot.create(MapData.spawns[spawnOrder[bi2 % spawnOrder.length]], difficulty));
+    }
+    radarNext = 0;
     state = 'play';
+    Sfx.unlock();
     show(menuEl, false);
     show(pauseEl, false);
     show(resultEl, false);
@@ -125,6 +131,16 @@
     var y = G.H - gh + 2 + bobY + p.recoil * 10;
     /* 枪口朝向屏幕中心（准星）——不让枪管横着指右边 */
     var rot = -0.15 + p.recoil * -0.03;
+
+    /* 开镜：枪体向画面中央抬起、摆正，抖动也随之减小 */
+    var ads = p.ads || 0;
+    if (ads > 0) {
+      var adsX = G.W * 0.5 - gw * 0.90, adsY = G.H * 0.35;
+      x = x + (adsX - x) * ads;
+      y = y + (adsY - y) * ads;
+      rot = rot * (1 - ads);
+      bobX *= (1 - ads * 0.75);
+    }
 
     ctx.save();
     if (p.reloadT > 0) {
@@ -271,6 +287,119 @@
     }
   }
 
+  /* ---------- 小地图（雷达）：每 3 秒扫一次，红点表示敌人大概位置 ---------- */
+  var radarBg = null, radarNext = 0, radarPulse = 0;
+
+  function buildRadarBg() {
+    var c = document.createElement('canvas');
+    c.width = G.MAP_W; c.height = G.MAP_H;
+    var g2 = c.getContext('2d');
+    for (var y = 0; y < G.MAP_H; y++) {
+      for (var x = 0; x < G.MAP_W; x++) {
+        if (!MapData.solid(x, y)) continue;
+        g2.fillStyle = x === 0 || y === 0 || x === G.MAP_W - 1 || y === G.MAP_H - 1
+          ? 'rgba(150,170,190,0.75)' : 'rgba(120,142,168,0.85)';
+        g2.fillRect(x, y, 1, 1);
+      }
+    }
+    radarBg = c;
+  }
+
+  function drawRadar(ctx) {
+    if (!radarBg) buildRadarBg();
+    var S = 76, pad = 6;
+    var ox = pad, oy = G.H - S - pad;
+    var cx = ox + S / 2, cy = oy + S / 2;
+    var scale = 3.2;              // 每米像素 → 半径 38px ≈ 9 米
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ox, oy, S, S);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(8,12,16,0.78)';
+    ctx.fillRect(ox, oy, S, S);
+
+    /* 地图随视角旋转：前进方向永远朝上 */
+    ctx.translate(cx, cy);
+    ctx.rotate(-player.angle - Math.PI / 2);
+    var sc = scale * G.TILE;
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(radarBg, -player.x * scale, -player.y * scale, G.MAP_W * sc, G.MAP_H * sc);
+    ctx.globalAlpha = 1;
+
+    /* 扫描线 */
+    var sweep = (game.time / G.RADAR_PULSE) * Math.PI * 2;
+    ctx.strokeStyle = 'rgba(130,220,255,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(sweep) * S, Math.sin(sweep) * S);
+    ctx.stroke();
+
+    /* 敌人红点（脉冲显形 + 开火显形，会淡出） */
+    for (var i = 0; i < game.bots.length; i++) {
+      var b = game.bots[i];
+      if (!b.alive) continue;
+      var life = game.time - (b.seenAt || -99);
+      if (life > G.RADAR_HOLD || life < 0) continue;
+      var a = 1 - life / G.RADAR_HOLD;
+      /* 大概位置：取整到 1.5 米 */
+      var rx = Math.round(b.x / 1.5) * 1.5, ry = Math.round(b.y / 1.5) * 1.5;
+      var dx = rx - player.x, dy = ry - player.y;
+      var rot2 = -player.angle - Math.PI / 2;
+      var rx2 = dx * Math.cos(rot2) - dy * Math.sin(rot2);
+      var ry2 = dx * Math.sin(rot2) + dy * Math.cos(rot2);
+      if (Math.hypot(rx2, ry2) > S * 0.5) continue;
+      ctx.globalAlpha = 0.3 + a * 0.7;
+      ctx.fillStyle = '#ff5252';
+      ctx.beginPath();
+      ctx.arc(rx2 * scale, ry2 * scale, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.16 * a;
+      ctx.beginPath();
+      ctx.arc(rx2 * scale, ry2 * scale, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+
+    /* 玩家箭头（永远在正中） */
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = '#8be08a';
+    ctx.beginPath();
+    ctx.moveTo(0, -4.5);
+    ctx.lineTo(3.2, 4);
+    ctx.lineTo(0, 2.2);
+    ctx.lineTo(-3.2, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    /* 距离环 */
+    ctx.strokeStyle = 'rgba(140,170,200,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, S * 0.3, 0, Math.PI * 2);
+    ctx.stroke();
+
+    /* 边框 */
+    ctx.strokeStyle = 'rgba(160,180,205,0.45)';
+    ctx.strokeRect(ox + 0.5, oy + 0.5, S - 1, S - 1);
+  }
+
+  function updateRadar(dt) {
+    radarNext -= dt;
+    if (radarNext > 0) return;
+    radarNext = G.RADAR_PULSE;
+    radarPulse = game.time;
+    for (var i = 0; i < game.bots.length; i++) {
+      var b = game.bots[i];
+      if (b.alive) b.seenAt = game.time + Math.random() * 0.12;
+    }
+  }
+
   /* ---------- 比分 / 计时 / 结束 ---------- */
   function updateMatchUI() {
     var m = game.match;
@@ -309,10 +438,19 @@
       var input = Input.read();
       if (input.pick === 0) player.weapon = 'rifle';
       else if (input.pick === 1) player.weapon = 'pistol';
+      var s0 = game.shots, bh0 = game.botHits || 0, k0 = game.match.player;
+      var hp0 = player.hp, rl0 = player.reloadT;
       Sim.step(game, player, dt, input);
       for (var bi = 0; bi < game.bots.length; bi++) {
         if (!game.match.over) Bot.update(dt, game.bots[bi], game, player);
       }
+      /* 音效 */
+      if (game.shots > s0) Sfx.shot(player.weapon);
+      if ((game.botHits || 0) > bh0) Sfx.hit();
+      if (game.match.player > k0) Sfx.kill();
+      if (player.hp < hp0 - 0.5) Sfx.hurt();
+      if (player.reloadT > 0 && rl0 === 0) Sfx.reload();
+      updateRadar(dt);
       updateMatchUI();
     } else {
       Input.read();
@@ -324,7 +462,29 @@
       drawBots(canvas.getContext('2d'));
       if (state === 'play') {
         drawGun(canvas.getContext('2d'), player);
+        drawRadar(canvas.getContext('2d'));
         Hud.drawCrosshair(canvas.getContext('2d'), player, game);
+        /* 受伤红色边缘 + 开镜暗角 */
+        var c2 = canvas.getContext('2d');
+        var sinceHurt = game.time - player.hurtAt;
+        if (sinceHurt < 0.5 && player.hurtAt) {
+          c2.save();
+          c2.globalAlpha = 0.45 * (1 - sinceHurt / 0.5);
+          var grd = c2.createRadialGradient(G.W / 2, G.H / 2, G.H * 0.3, G.W / 2, G.H / 2, G.H * 0.75);
+          grd.addColorStop(0, 'rgba(255,0,0,0)');
+          grd.addColorStop(1, 'rgba(190,20,20,0.95)');
+          c2.fillStyle = grd;
+          c2.fillRect(0, 0, G.W, G.H);
+          c2.restore();
+        }
+        if (player.ads > 0.5) {
+          c2.save();
+          c2.globalAlpha = (player.ads - 0.5) * 0.5;
+          c2.fillStyle = '#000';
+          c2.fillRect(0, 0, G.W, 10);
+          c2.fillRect(0, G.H - 10, G.W, 10);
+          c2.restore();
+        }
       }
       Hud.update(player, game, dt);
     }
