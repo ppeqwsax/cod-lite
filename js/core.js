@@ -33,8 +33,8 @@ var G = {
   MOUSE: 0.0024,     // 每像素转角（弧度）
   PITCH_MAX: 0.55,   // 伪俯仰上限（越大越能抬枪打高处）
   MAX_HP: 100,
-  REGEN_DELAY: 5,
-  REGEN_RATE: 20
+  REGEN_DELAY: 2.2,
+  REGEN_RATE: 55
 };
 
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
