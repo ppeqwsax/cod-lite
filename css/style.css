@@ -94,6 +94,18 @@ html, body {
   box-shadow: 0 18px 50px rgba(0,0,0,0.6);
 }
 .panel.small { width: min(340px, 80vw); text-align: center; }
+.panel.small .btn { margin: 10px 0; }
+.panel.small .btn.primary { margin-top: 18px; }
+
+/* 结算数据 */
+.stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  margin: 18px 0 6px; padding: 12px 6px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+}
+.stats > div { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.stats b { font-size: 19px; color: #f2f5f9; letter-spacing: 0.04em; }
+.stats span { font-size: 10px; color: var(--dim); letter-spacing: 0.14em; }
 
 .panel h1 {
   font-size: 30px; letter-spacing: 0.12em; font-weight: 800;

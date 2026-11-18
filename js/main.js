@@ -100,8 +100,23 @@
     Input.lock();
   }
 
-  function onLockChange(locked) {
-    if (locked) {
+  /* Esc 打开暂停菜单（单机）；联机不暂停，只解锁指针 */
+  document.addEventListener('keydown', function (e) {
+    if (e.code !== 'Escape') return;
+    if (state === 'play') {
+      if (online) { Input.unlock(); return; }
+      state = 'pause';
+      show(pauseEl, true);
+      Input.unlock();
+      setStatus('已暂停');
+    } else if (state === 'pause') {
+      state = 'play';
+      show(pauseEl, false);
+      Input.lock();
+    }
+  });
+
+  function onLockChange(locked) {    if (locked) {
       if (state === 'pause') { state = 'play'; show(pauseEl, false); setStatus('游戏中'); }
       return;
     }
@@ -180,8 +195,30 @@
   }
   resumeBtn.addEventListener('click', function () {
     show(pauseEl, false);
+    if (state === 'pause') state = 'play';
     Input.lock();
   });
+
+  var restartBtn = document.getElementById('restartBtn');
+  var quitBtn = document.getElementById('quitBtn');
+  var menuBtn = document.getElementById('menuBtn');
+  if (restartBtn) restartBtn.addEventListener('click', function () {
+    show(pauseEl, false);
+    if (online) { endOnline(); return; }
+    startGame();
+  });
+  function backToMenu() {
+    if (online) { endOnline(); return; }
+    state = 'menu';
+    show(pauseEl, false);
+    show(resultEl, false);
+    show(deadEl, false);
+    show(menuEl, true);
+    Input.unlock();
+    setStatus('菜单');
+  }
+  if (quitBtn) quitBtn.addEventListener('click', backToMenu);
+  if (menuBtn) menuBtn.addEventListener('click', backToMenu);
 
   /* ---------- 枪械绘制 ---------- */
   function drawGun(ctx, p) {
@@ -557,6 +594,17 @@
       resultTitle.textContent = draw ? '平 局' : (win ? '胜 利' : '失 败');
       resultTitle.style.color = draw ? '#ffc451' : (win ? '#8be08a' : '#ff6b5e');
       resultSub.textContent = '比分 ' + mine + ' : ' + theirs + (m.left <= 0 ? '（时间到）' : '');
+      var myKills = online ? mine : (player.kills || 0);
+      var myDeaths = online ? theirs : (player.deaths || 0);
+      var acc = game.shots ? Math.round((game.hits / game.shots) * 100) : 0;
+      var statsEl = document.getElementById('resultStats');
+      if (statsEl) {
+        statsEl.innerHTML =
+          '<div><b>' + myKills + '</b><span>击杀</span></div>' +
+          '<div><b>' + myDeaths + '</b><span>阵亡</span></div>' +
+          '<div><b>' + acc + '%</b><span>命中率</span></div>' +
+          '<div><b>' + fmtTime(Math.round(300 - m.left)) + '</b><span>用时</span></div>';
+      }
       show(resultEl, true);
       setStatus('对局结束');
     }
@@ -669,7 +717,8 @@
       x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2),
       a: +p.angle.toFixed(3), p: +p.pitch.toFixed(3),
       hp: Math.round(p.hp), al: p.alive ? 1 : 0, ads: +(p.ads || 0).toFixed(2),
-      wp: p.weapon === 'pistol' ? 1 : 0, mz: p.muzzle > 0 ? 1 : 0
+      wp: p.weapon === 'pistol' ? 1 : 0, mz: p.muzzle > 0 ? 1 : 0,
+      am: [p.ammo.rifle, p.ammo.pistol], rs: [p.reserve.rifle, p.reserve.pistol]
     };
   }
 
@@ -693,6 +742,13 @@
         /* 自己：轻微校正，误差过大才硬同步 */
         pl.hp = s.hp;
         pl.alive = !!s.al;
+        /* 弹药以房主为准，但只往下修（本地刚打完的枪不要被弹回来） */
+        if (s.am) {
+          if (s.am[0] < pl.ammo.rifle) pl.ammo.rifle = s.am[0];
+          if (s.am[1] < pl.ammo.pistol) pl.ammo.pistol = s.am[1];
+          if (s.rs[0] > pl.reserve.rifle) pl.reserve.rifle = s.rs[0];
+          if (s.rs[1] > pl.reserve.pistol) pl.reserve.pistol = s.rs[1];
+        }
         var err = Math.hypot(s.x - pl.x, s.y - pl.y);
         if (!s.al || err > 1.8) {
           pl.x = s.x; pl.y = s.y; pl.z = s.z; pl.vx = 0; pl.vy = 0;

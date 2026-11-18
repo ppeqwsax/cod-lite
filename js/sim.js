@@ -159,15 +159,29 @@ var Sim = (function () {
 
     /* 先看有没有打到人（bot 或另一名玩家）：比弹着点近、且弹道高度落在身上才算 */
     var hitBot = null, hitPl = null, hitT = res.hit ? res.dist : def.range;
+    function lateral(o, ox, oy) {
+      var vx = ox - p.x, vy = oy - p.y;
+      var t = vx * Math.cos(ang) + vy * Math.sin(ang);
+      if (t <= 0 || t > hitT) return -1;
+      var lat = Math.abs(vx * Math.sin(ang) - vy * Math.cos(ang));
+      var zAt = eyeZ + p.pitch * (t / G.TILE);
+      if (zAt > (o.z || 0) + 1.75 || zAt < (o.z || 0) - 0.1) return -1;
+      return lat;
+    }
     function testTarget(o) {
       if (!o.alive) return;
+      var lat = lateral(o, o.x, o.y);
+      /* 联机延迟补偿：对手位置晚一个 RTT 才到，回头看他最近 200ms 的轨迹 */
+      if ((lat < 0 || lat > 0.55) && o.def && o.hist && o.hist.length) {
+        for (var k = o.hist.length - 1; k >= 0; k--) {
+          if (g.time - o.hist[k].t > 0.2) break;
+          var l2 = lateral(o, o.hist[k].x, o.hist[k].y);
+          if (l2 >= 0 && l2 <= 0.55) { lat = l2; break; }
+        }
+      }
+      if (lat < 0 || lat > 0.55) return;
       var vx = o.x - p.x, vy = o.y - p.y;
-      var t = vx * Math.cos(ang) + vy * Math.sin(ang);
-      if (t <= 0 || t > hitT) return;
-      if (Math.abs(vx * Math.sin(ang) - vy * Math.cos(ang)) > 0.55) return;
-      var zAt = eyeZ + p.pitch * (t / G.TILE);
-      if (zAt > (o.z || 0) + 1.75 || zAt < (o.z || 0) - 0.1) return;
-      hitT = t;
+      hitT = vx * Math.cos(ang) + vy * Math.sin(ang);
       if (o.def) { hitPl = o; hitBot = null; } else { hitBot = o; hitPl = null; }
     }
     for (var i = 0; i < g.bots.length; i++) testTarget(g.bots[i]);
@@ -258,6 +272,14 @@ var Sim = (function () {
   /* 推进比赛：计时、结束判定、所有人复活、特效寿命 */
   function tickMatch(g, dt) {
     g.time += dt;
+
+    /* 记录玩家近 200ms 轨迹，联机时房主拿它做延迟补偿 */
+    for (var hi = 0; hi < g.players.length; hi++) {
+      var hp0 = g.players[hi];
+      if (!hp0.hist) hp0.hist = [];
+      hp0.hist.push({ t: g.time, x: hp0.x, y: hp0.y });
+      if (hp0.hist.length > 9) hp0.hist.shift();
+    }
 
     var m = g.match;
     if (!m.over) {
