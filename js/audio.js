@@ -74,6 +74,14 @@ var Sfx = (function () {
       tone('square', 700, 700, 0.06, 0.14);
       tone('square', 1050, 1050, 0.08, 0.14, 0.07);
     },
+    /* 击杀确认音：一声清脆的金属「咔」+ 上扬双音，比命中更亮更厚 */
+    killConfirm: function (headshot) {
+      if (!on || !init()) return;
+      burst(0.06, 0.5, 'highpass', 3200);
+      tone('triangle', headshot ? 1400 : 1200, headshot ? 2200 : 1800, 0.1, 0.16);
+      tone('square', headshot ? 900 : 780, headshot ? 1400 : 1180, 0.12, 0.12, 0.06);
+      if (headshot) tone('square', 2400, 3000, 0.08, 0.1, 0.02);
+    },
     hurt: function () {
       if (!on || !init()) return;
       burst(0.18, 0.35, 'lowpass', 400, 120);

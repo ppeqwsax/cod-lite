@@ -324,7 +324,7 @@
   }
 
   /* ---------- 小地图（雷达）：每 3 秒扫一次，红点表示敌人大概位置 ---------- */
-  var radarBg = null, radarNext = 0, radarPulse = 0;
+  var radarBg = null, radarNext = 0, radarPulse = 0, bumpedKillAt = -1;
 
   function buildRadarBg() {
     var c = document.createElement('canvas');
@@ -469,6 +469,77 @@
       setStatus('对局结束');
     }
   }
+  /* ---------- 击杀反馈：尸体标记 + 击杀横幅 + 边缘闪光 ---------- */
+  function drawKillFx(ctx) {
+    var t = game.time;
+
+    /* 敌人倒下的位置留一个叉号，1.6 秒淡出 */
+    if (game.deathMarks) {
+      for (var i = 0; i < game.deathMarks.length; i++) {
+        var dm = game.deathMarks[i];
+        var life = t - dm.t;
+        if (life < 0 || life > 1.6) continue;
+        var pr = Render.project(dm.x, dm.y, (dm.z || 0) + 1.1);
+        if (!pr) continue;
+        var a = 1 - life / 1.6;
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.font = 'bold 11px "Segoe UI", system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillText('✕', pr.x + 0.7, pr.y + 0.7);
+        ctx.fillStyle = dm.head ? '#ffd34d' : '#ff5a4d';
+        ctx.fillText('✕', pr.x, pr.y);
+        ctx.restore();
+      }
+    }
+
+    /* 击杀横幅 */
+    var lk = game.lastKill;
+    if (!lk) return;
+    var dt = t - lk.t;
+
+    if (dt >= 0 && dt < 1.5) {
+      var pop = Math.min(1, dt / 0.09);
+      var out = dt > 1.15 ? 1 - (dt - 1.15) / 0.35 : 1;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, out);
+      ctx.translate(G.W / 2, 60 - (1 - pop) * 7);
+      var sc = 0.82 + 0.18 * pop;
+      ctx.scale(sc, sc);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      var txt = lk.headshot ? '爆 头 击 杀' : '击 杀';
+      ctx.font = 'bold 17px "Segoe UI", system-ui';
+      ctx.fillStyle = 'rgba(0,0,0,0.62)';
+      ctx.fillText(txt, 1, 1);
+      ctx.fillStyle = lk.headshot ? '#ffd34d' : '#ff4a3d';
+      ctx.fillText(txt, 0, 0);
+
+      if (lk.streak >= 2) {
+        var names = ['', '', '双 杀', '三 杀', '四 杀', '五 杀', '大 杀 特 杀'];
+        var ns = names[Math.min(lk.streak, 6)];
+        ctx.font = 'bold 9px "Segoe UI", system-ui';
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillText(ns, 15, 16);
+        ctx.fillStyle = '#ffd34d';
+        ctx.fillText(ns, 14, 15);
+      }
+      ctx.restore();
+    }
+
+    /* 击杀瞬间四周泛红 */
+    if (dt >= 0 && dt < 0.3) {
+      var a2 = 0.32 * (1 - dt / 0.3);
+      var grd = ctx.createRadialGradient(G.W / 2, G.H / 2, G.H * 0.32, G.W / 2, G.H / 2, G.H * 0.82);
+      grd.addColorStop(0, 'rgba(255,60,40,0)');
+      grd.addColorStop(1, 'rgba(255,50,30,' + a2.toFixed(3) + ')');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, G.W, G.H);
+    }
+  }
+
   function frame(now) {    requestAnimationFrame(frame);
     if (!last) last = now;
     var dt = Math.min(0.05, (now - last) / 1000);
@@ -479,6 +550,7 @@
       if (input.pick === 0) player.weapon = 'rifle';
       else if (input.pick === 1) player.weapon = 'pistol';
       var s0 = game.shots, bh0 = game.botHits || 0, k0 = game.match.player;
+      var lk0 = game.lastKill ? game.lastKill.t : -1;
       var hp0 = player.hp, rl0 = player.reloadT;
       Sim.step(game, player, dt, input);
       for (var bi = 0; bi < game.bots.length; bi++) {
@@ -487,7 +559,10 @@
       /* 音效 */
       if (game.shots > s0) Sfx.shot(player.weapon);
       if ((game.botHits || 0) > bh0) Sfx.hit();
-      if (game.match.player > k0) Sfx.kill();
+      if (game.match.player > k0 || (game.lastKill && game.lastKill.t !== lk0)) {
+        var spEl = document.getElementById('scoreP');
+        if (spEl) { spEl.classList.remove('bump'); void spEl.offsetWidth; spEl.classList.add('bump'); }
+      }
       if (player.hp < hp0 - 0.5) Sfx.hurt();
       if (player.reloadT > 0 && rl0 === 0) Sfx.reload();
       updateRadar(dt);
@@ -497,6 +572,15 @@
     }
 
     if (player) {
+      /* 任何地方发生击杀都触发一次反馈（音效 + 比分跳动） */
+      if (game.lastKill && game.lastKill.t !== bumpedKillAt) {
+        bumpedKillAt = game.lastKill.t;
+        if (state === 'play') {
+          Sfx.killConfirm(!!game.lastKill.headshot);
+          var spEl2 = document.getElementById('scoreP');
+          if (spEl2) { spEl2.classList.remove('bump'); void spEl2.offsetWidth; spEl2.classList.add('bump'); }
+        }
+      }
       Render.drawWorld(player);
       drawShots(canvas.getContext('2d'));
       drawBots(canvas.getContext('2d'));
@@ -504,6 +588,7 @@
         drawGun(canvas.getContext('2d'), player);
         drawRadar(canvas.getContext('2d'));
         Hud.drawCrosshair(canvas.getContext('2d'), player, game);
+        drawKillFx(canvas.getContext('2d'));
         /* 受伤红色边缘 + 开镜暗角 */
         var c2 = canvas.getContext('2d');
         var sinceHurt = game.time - player.hurtAt;

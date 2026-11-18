@@ -66,6 +66,12 @@ var Sim = (function () {
       time: 0,
       shots: 0,
       hits: 0,
+      botHits: 0,
+      lastHit: null,
+      lastKill: null,
+      lastKillAt: 0,
+      killStreak: 0,
+      deathMarks: [],
       match: { target: 25, limit: 300, left: 300, over: false, player: 0, bot: 0 }
     };
     g.players.push(new Player(MapData.spawns[0]));
@@ -154,6 +160,7 @@ var Sim = (function () {
     if (hitBot) {
       g.hits++;
       g.botHits = (g.botHits || 0) + 1;
+      g.lastHit = { t: g.time, kill: false };
       hitBot.hp -= def.dmg;
       hitBot.hurtAt = g.time;
       var bz = (hitBot.z || 0) + 1.15;
@@ -165,6 +172,20 @@ var Sim = (function () {
         hitBot.respawnT = 3;
         g.match.player++;
         p.kills = (p.kills || 0) + 1;
+
+        /* ---- 击杀反馈数据 ---- */
+        var headshot = zAtB > (hitBot.z || 0) + 1.45;
+        if (!g.lastKillAt || g.time - g.lastKillAt > 3.5) g.killStreak = 0;
+        g.killStreak = (g.killStreak || 0) + 1;
+        g.lastKillAt = g.time;
+        g.lastKill = {
+          t: g.time, headshot: headshot, streak: g.killStreak,
+          x: hitBot.x, y: hitBot.y, z: hitBot.z || 0
+        };
+        g.lastHit = { t: g.time, kill: true, headshot: headshot };
+        if (!g.deathMarks) g.deathMarks = [];
+        g.deathMarks.push({ x: hitBot.x, y: hitBot.y, z: hitBot.z || 0, t: g.time, head: headshot });
+        if (g.deathMarks.length > 10) g.deathMarks.shift();
       }
     } else if (res.hit) {
       g.hits++;
